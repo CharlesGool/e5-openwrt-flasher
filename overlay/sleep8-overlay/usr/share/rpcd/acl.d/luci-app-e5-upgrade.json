@@ -1,0 +1,19 @@
+{
+  "luci-app-e5-upgrade": {
+    "description": "E5 系统升级: upload an E5 flash package and update the system with it",
+    "read": {
+      "ubus": {
+        "e5-upgrade": [ "status" ]
+      }
+    },
+    "write": {
+      "ubus": {
+        "e5-upgrade": [ "prepare", "check", "start", "clean", "reboot" ]
+      },
+      "file": {
+        "/mnt/e5-data/e5linux/upgrade/package.zip": [ "write" ],
+        "/root/.e5-upgrade/package.zip": [ "write" ]
+      }
+    }
+  }
+}

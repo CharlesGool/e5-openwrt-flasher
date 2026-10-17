@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# 禁用 IPv6 (e5-sleep5, 高级 -> 网络): as the settings say, at boot.
+START=99
+
+boot() {
+	/usr/libexec/e5-ipv6 migrate
+	( /usr/libexec/e5-ipv6 sync ) </dev/null >/dev/null 2>&1 &
+}
+
+start() {
+	/usr/libexec/e5-ipv6 sync
+}

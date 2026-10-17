@@ -1,0 +1,30 @@
+The scripts, tests and overlay files in this repository (build/, tests/, overlay/, upstream/)
+are licensed under the MIT License below.
+
+package/device-install-image.sh and the flash packages in the Releases are derived from
+e5-linux (https://github.com/sprd-linux-devs/e5-linux), MIT License, Copyright (c) 2026
+Enceka <enceka@yeah.net>; each package carries that LICENSE.  The Linux kernel inside the
+flash packages is GPL-2.0-only; its patches and build are at
+https://github.com/CharlesGool/e5-sleep-kernel.
+
+MIT License
+
+Copyright (c) 2026 e5-openwrt-flasher contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

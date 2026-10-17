@@ -1,0 +1,8 @@
+{
+  "admin/system/e5-upgrade": {
+    "title": "E5 系统升级",
+    "order": 75,
+    "action": { "type": "view", "path": "e5-upgrade/index" },
+    "depends": { "acl": [ "luci-app-e5-upgrade" ] }
+  }
+}

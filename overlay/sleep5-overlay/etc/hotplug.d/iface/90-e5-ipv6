@@ -1,0 +1,2 @@
+# 禁用 IPv6 (e5-ipv6): an interface made since, IPv6 off on it too
+[ "$ACTION" = ifup ] && [ -x /usr/libexec/e5-ipv6 ] && /usr/libexec/e5-ipv6 ifup

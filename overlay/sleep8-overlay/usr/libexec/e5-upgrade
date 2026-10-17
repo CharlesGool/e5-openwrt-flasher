@@ -1,0 +1,163 @@
+#!/bin/sh
+# E5 系统升级 from LuCI (系统 -> E5 系统升级, e5-sleep8): a flash package's update, as
+# flash.py --update does it from a computer, run on the device itself.
+#
+#   e5-upgrade prepare   JSON: where the package is to be uploaded, the space there, this system
+#   e5-upgrade check     the uploaded package unpacked and verified in the background (SHA256SUMS,
+#                        the device profile, boot.json): state checking, then checked or failed
+#   e5-upgrade start     the update in the background: state running, then done or failed
+#   e5-upgrade status    JSON: idle | checking | checked | running | done | failed, the package's
+#                        VERSION, the log's tail
+#   e5-upgrade clean     the package and its unpacked copy removed
+#
+# The update is flash.py's steps with the package's own scripts: device-flash-boot.sh writes the
+# boot image's head into boot_b and arms slot b (it fetches over HTTP: a uhttpd on 127.0.0.1
+# serves it the head for the while), device-install-image.sh puts the root image in, keeping the
+# configuration and the packages added with apk, then the boot target: e5-os openwrt on a
+# multi-system SD card, else e5linux/boot-os.  Then a reboot (LuCI's button) starts the new one.
+# A boot_b that does not verify arms nothing, and the root image is swapped in only at the
+# next boot: a failed update leaves the running system as it is.
+#
+# The package goes onto userdata (/mnt/e5-data/e5linux/upgrade), else the root's /root: not RAM.
+
+STATE=/tmp/run/e5-upgrade
+# (rpcd, and with it LuCI's calls, runs with umask 077: the boot head would be 0600, which uhttpd
+# does not serve -- device-flash-boot.sh's download then fails)
+umask 022
+if [ -d /mnt/e5-data/e5linux ]; then WORK=/mnt/e5-data/e5linux/upgrade
+else WORK=/root/.e5-upgrade; fi
+ZIP=$WORK/package.zip
+PKG=$WORK/pkg
+mkdir -p "$STATE"
+
+# a JSON string's inside: quotes and backslashes escaped, lines as \n
+jstr() { printf '%s' "$1" | awk 'BEGIN { ORS = "" } { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, " "); if (NR > 1) print "\\n"; print }'; }
+reply() { printf '{"ok":%s%s}\n' "$1" "${2:+,$2}"; }
+fail() { reply false "\"error\":\"$(jstr "$1")\""; exit 0; }
+state() { echo "$1" > "$STATE/state"; }
+bad() { echo "$1"; state failed; exit 1; }
+unzip_() { if command -v unzip >/dev/null; then unzip "$@"; else /opt/e5/bin/busybox unzip "$@"; fi; }
+# the package's top directory (the zip holds one: Openwrt_E5_Flasher_*/)
+top() { for d in "$PKG"/*/; do [ -f "$d/files/boot.json" ] && { echo "${d%/}"; return 0; }; done; return 1; }
+running() { [ -f "$STATE/pid" ] && kill -0 "$(cat "$STATE/pid")" 2>/dev/null; }
+background() {
+	: > "$STATE/log"; state "$1"
+	setsid sh "$0" "$2" >> "$STATE/log" 2>&1 < /dev/null &
+	echo $! > "$STATE/pid"
+	reply true
+}
+
+case "$1" in
+prepare)
+	mkdir -p "$WORK" || fail "cannot make $WORK"
+	running && fail '升级正在进行（an update is running）'
+	rm -rf "$PKG" "$ZIP"; rm -f "$STATE/state" "$STATE/log" "$STATE/version"
+	free=$(df -k "$WORK" | awk 'NR == 2 { print $4 }')
+	reply true "\"path\":\"$ZIP\",\"free_mb\":$((${free:-0} / 1024)),\"current\":\"$(jstr "$(cat /etc/e5/image-version 2>/dev/null)")\",\"kernel\":\"$(uname -r)\""
+	;;
+check)
+	running && fail '升级正在进行（an update is running）'
+	[ -s "$ZIP" ] || fail '没有上传的刷机包（no package uploaded）'
+	background checking verify
+	;;
+verify)
+	# (the background job of check)
+	echo "== 解压 / unpacking"
+	rm -rf "$PKG"; mkdir -p "$PKG"
+	unzip_ -q -o "$ZIP" -d "$PKG" >/dev/null 2>&1 || { rm -rf "$PKG"; bad '不是有效的 zip（not a zip that unpacks）'; }
+	rm -f "$ZIP"
+	T=$(top) || bad '不是 E5 刷机包（no files/boot.json）'
+	F=$T/files
+	for f in boot.img boot.json openwrt.ext4.gz device-flash-boot.sh device-install-image.sh VERSION; do
+		[ -s "$F/$f" ] || bad "刷机包缺少 files/$f"
+	done
+	profile=$(jsonfilter -i "$F/device-profile.json" -e '@.profile' 2>/dev/null)
+	mine=$(cat /etc/e5/device-profile 2>/dev/null)
+	[ -z "$profile" ] || [ "$profile" = "$mine" ] || bad "机型不符：刷机包是 $profile，本机是 $mine"
+	echo "== 校验 / verifying (SHA256SUMS)"
+	[ -f "$T/SHA256SUMS" ] || bad '刷机包没有 SHA256SUMS'
+	(cd "$T" && sha256sum -c -s SHA256SUMS) || bad '校验失败：刷机包已损坏，请重新下载'
+	head=$(jsonfilter -i "$F/boot.json" -e '@.sha256_head56m')
+	off=$(jsonfilter -i "$F/boot.json" -e '@.persist_log_offset')
+	case "$head" in *[!0-9a-f]*|'') bad 'boot.json 不完整' ;; esac
+	case "$off" in *[!0-9]*|'') bad 'boot.json 不完整' ;; esac
+	tr -d '\n' < "$F/VERSION" > "$STATE/version"
+	echo "   OK: $(cat "$STATE/version")"
+	state checked
+	;;
+start)
+	running && fail '升级正在进行（an update is running）'
+	[ "$(cat "$STATE/state" 2>/dev/null)" = checked ] || fail '请先上传并校验刷机包（check first）'
+	top >/dev/null || fail '刷机包不见了，请重新上传'
+	background running run
+	;;
+run)
+	# (the background job of start)
+	T=$(top) || bad '刷机包不见了'
+	F=$T/files
+	srv=
+	trap '[ -n "$srv" ] && kill "$srv" 2>/dev/null; rm -f "$WORK/boot-head.img"' EXIT
+	echo "== $(cat "$STATE/version")"
+	head=$(jsonfilter -i "$F/boot.json" -e '@.sha256_head56m')
+	mb=$(( $(jsonfilter -i "$F/boot.json" -e '@.persist_log_offset') / 1048576 ))
+	# (uhttpd serves only what others may read: the files new, the directory open, whatever an
+	# earlier run under rpcd's umask left)
+	chmod 755 "$WORK"
+	rm -f "$WORK/boot-head.img" "$WORK/ready.txt"
+	dd if="$F/boot.img" of="$WORK/boot-head.img" bs=1M count="$mb" 2>/dev/null
+	chmod 644 "$WORK/boot-head.img"
+	[ "$(sha256sum "$WORK/boot-head.img" | cut -d' ' -f1)" = "$head" ] || bad 'boot.img 头部校验不符'
+	# (room for the unpacked root image first: boot_b is not written for an update that cannot finish;
+	# gzip's trailer has the unpacked size)
+	if [ ! -f /etc/e5/sd-root ]; then
+		need=$(( $(tail -c 4 "$F/openwrt.ext4.gz" | od -An -tu4 | tr -d ' ') / 1048576 + 64 ))
+		free=$(df -m /mnt/e5-data | awk 'NR == 2 { print $4 }')
+		[ "${free:-0}" -ge "$need" ] ||
+			bad "userdata 空间不足：解开系统镜像需要 ${need} MB，可用 ${free} MB（可删除 /mnt/e5-data/e5linux/openwrt.ext4.old 腾出空间）"
+	fi
+	port=$((20000 + $$ % 10000))
+	echo ok > "$WORK/ready.txt"; chmod 644 "$WORK/ready.txt"
+	uhttpd -f -p "127.0.0.1:$port" -h "$WORK" 2>&1 &
+	srv=$!
+	# (until it answers: the device is busy right after the head's copy and hash)
+	n=0
+	until wget -q -O /dev/null "http://127.0.0.1:$port/ready.txt" 2>/dev/null; do
+		n=$((n + 1))
+		[ "$n" -lt 20 ] || bad '本机临时下载服务没有起来（uhttpd on 127.0.0.1）'
+		sleep 1
+	done
+	rm -f "$WORK/ready.txt"
+	sh "$F/device-flash-boot.sh" "http://127.0.0.1:$port/boot-head.img" "$head" "$mb" ||
+		bad '写 boot_b 失败：系统没有改动'
+	kill "$srv" 2>/dev/null; srv=
+	cd "$F" && sh ./device-install-image.sh "$F/openwrt.ext4.gz" ||
+		bad '安装系统镜像失败：当前系统不受影响（boot_b 已是新内核，重启前请重试升级）'
+	if [ -f /etc/e5/sd-root ]; then
+		[ -f /mnt/e5-boot/format ] && e5-os openwrt
+	else
+		d=/mnt/e5-data/e5linux
+		rm -f "$d/boot-os-next"
+		echo openwrt > "$d/boot-os"
+	fi
+	sync
+	rm -rf "$PKG"
+	echo "== 完成：重启后进入新系统 / done: reboot to start it"
+	state done
+	;;
+status)
+	s=$(cat "$STATE/state" 2>/dev/null || echo idle)
+	case "$s" in checking|running) running || { s=failed; state failed; } ;; esac
+	log=$(tail -n 40 "$STATE/log" 2>/dev/null)
+	# (before the first upload WORK is not there yet: its parent's space then)
+	free=$(df -k "$WORK" 2>/dev/null || df -k "${WORK%/*}" 2>/dev/null)
+	free=$(echo "$free" | awk 'NR == 2 { print $4 }')
+	reply true "\"state\":\"$s\",\"version\":\"$(jstr "$(cat "$STATE/version" 2>/dev/null)")\",\"log\":\"$(jstr "$log")\",\"current\":\"$(jstr "$(cat /etc/e5/image-version 2>/dev/null)")\",\"kernel\":\"$(uname -r)\",\"free_mb\":$((${free:-0} / 1024))"
+	;;
+clean)
+	running && fail '升级正在进行（an update is running）'
+	rm -rf "$PKG" "$ZIP" "$WORK/boot-head.img"; rm -f "$STATE/state" "$STATE/version"
+	reply true
+	;;
+*)
+	sed -n '2,22p' "$0"; exit 2 ;;
+esac

@@ -1,0 +1,190 @@
+#!/bin/sh
+# Disable IPv6 (e5-sleep5: built in, 高级 -> 网络; it was the noipv6 info
+# screen app): IPv6 off on the whole device, and back exactly as it was.
+#
+#   e5-ipv6 sync      as the settings say (uci e5-plugin-noipv6.settings:
+#                     enabled, wan_ipv4, filter_aaaa; each 1 by default)
+#   e5-ipv6 on WAN_IPV4 FILTER_AAAA   IPv6 off (each argument 1 or 0):
+#       the kernel: disable_ipv6 on every interface but lo, and for new ones
+#           (/etc/sysctl.d, so after a reboot too);
+#       WAN_IPV4: the mobile data bearer asks for IPv4 only (ModemManager's
+#           network.wan.iptype, when the WAN is proto modemmanager);
+#       the LAN (USB and hotspot): no RA, DHCPv6 or NDP (odhcpd), no ULA prefix;
+#       FILTER_AAAA: dnsmasq answers no AAAA records.
+#   e5-ipv6 off       everything as it was before "on"
+#   e5-ipv6 ifup      (the iface hotplug hook) IPv6 off on interfaces made since
+#   e5-ipv6 status    JSON
+#   e5-ipv6 migrate   the noipv6 app, if installed, removed: this replaces it
+#
+# "on" keeps what it changes in the uci config e5-plugin-noipv6, section
+# state (each value before it, or __unset__; and which interfaces had IPv6 off
+# already), so "off" puts back exactly that.  The config is the app's, so its
+# settings and saved values carry over.
+
+CFG=e5-plugin-noipv6
+SYSCTL=/etc/sysctl.d/90-e5-noipv6.conf
+CONF=/proc/sys/net/ipv6/conf
+INIT=/etc/init.d
+OPTS='network.wan.iptype network.lan.ip6assign network.globals.ula_prefix dhcp.lan.ra dhcp.lan.dhcpv6 dhcp.lan.ndp dhcp.@dnsmasq[0].filter_aaaa'
+
+key() { echo "$1" | tr -c 'A-Za-z0-9\n' '_'; }
+applied() { [ "$(uci -q get $CFG.state.applied)" = 1 ]; }
+saved() { uci -q get "$CFG.state.$(key "$1")"; }
+setting() { [ "$(uci -q get $CFG.settings.$1 || echo 1)" != 0 ] && echo 1 || echo 0; }
+
+# an option set to a value: 0 when it changed
+setv() {
+	[ "$(uci -q get "$1")" = "$2" ] && return 1
+	uci set "$1=$2"
+}
+# an option removed: 0 when it was there
+delv() {
+	uci -q get "$1" >/dev/null || return 1
+	uci delete "$1"
+}
+# an option back to its saved value: 0 when it changed
+restore() {
+	local v
+	v=$(saved "$1") || return 1
+	if [ "$v" = __unset__ ]; then delv "$1"; else setv "$1" "$v"; fi
+}
+
+# the interfaces with IPv6 settings (lo stays as it is: ::1 is local only)
+ifaces() {
+	local d n
+	for d in $CONF/*; do
+		n=${d##*/}
+		case $n in all|default|lo) ;; *) echo "$n" ;; esac
+	done
+}
+
+v6_off() {
+	local n
+	echo 1 > $CONF/default/disable_ipv6
+	for n in $(ifaces); do
+		[ "$(cat $CONF/$n/disable_ipv6 2>/dev/null)" = 1 ] || echo 1 > $CONF/$n/disable_ipv6 2>/dev/null
+	done
+}
+
+# back on, but not where it was off before "on" (e.g. usb0, a bridge port)
+v6_on() {
+	local n was
+	was=" $(uci -q get $CFG.state.v6_off) "
+	echo "$(uci -q get $CFG.state.v6_default || echo 0)" > $CONF/default/disable_ipv6
+	for n in $(ifaces); do
+		case "$was" in *" $n "*) continue ;; esac
+		echo 0 > $CONF/$n/disable_ipv6 2>/dev/null
+	done
+}
+
+do_on() {
+	local wan4=${1:-1} aaaa=${2:-1} net=0 dhcp=0 dns=0 o n v off=''
+	[ -f /etc/config/$CFG ] || touch /etc/config/$CFG
+	if ! applied; then
+		uci -q delete $CFG.state
+		uci set $CFG.state=state
+		for o in $OPTS; do
+			v=$(uci -q get "$o") || v=__unset__
+			uci set "$CFG.state.$(key "$o")=$v"
+		done
+		for n in $(ifaces); do
+			[ "$(cat $CONF/$n/disable_ipv6 2>/dev/null)" = 1 ] && off="$off $n"
+		done
+		uci set "$CFG.state.v6_off=${off# }"
+		uci set "$CFG.state.v6_default=$(cat $CONF/default/disable_ipv6)"
+		uci set $CFG.state.applied=1
+		uci commit $CFG
+	fi
+
+	if [ "$wan4" = 1 ] && [ "$(uci -q get network.wan.proto)" = modemmanager ]; then
+		setv network.wan.iptype ipv4 && net=1
+	else
+		restore network.wan.iptype && net=1
+	fi
+	delv network.lan.ip6assign && net=1
+	delv network.globals.ula_prefix && net=1
+	if uci -q get dhcp.lan >/dev/null; then
+		for o in ra dhcpv6 ndp; do setv dhcp.lan.$o disabled && dhcp=1; done
+	fi
+	if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null; then
+		if [ "$aaaa" = 1 ]; then
+			setv 'dhcp.@dnsmasq[0].filter_aaaa' 1 && dns=1
+		else
+			restore 'dhcp.@dnsmasq[0].filter_aaaa' && dns=1
+		fi
+	fi
+	[ $net = 1 ] && uci commit network
+	[ $dhcp = 1 ] || [ $dns = 1 ] && uci commit dhcp
+
+	if [ ! -f $SYSCTL ]; then
+		mkdir -p "${SYSCTL%/*}"
+		printf '%s\n' '# 禁用 IPv6 (e5-ipv6): no IPv6 on new interfaces' \
+			'net.ipv6.conf.default.disable_ipv6=1' > $SYSCTL
+	fi
+	v6_off
+
+	[ $net = 1 ] && $INIT/network reload >/dev/null 2>&1
+	[ $dhcp = 1 ] && $INIT/odhcpd reload >/dev/null 2>&1
+	[ $dns = 1 ] && $INIT/dnsmasq reload >/dev/null 2>&1
+	[ $net = 1 ] || [ $dhcp = 1 ] || [ $dns = 1 ] && logger -t e5-ipv6 "IPv6 off (network $net, dhcp $dhcp, dns $dns)"
+	return 0
+}
+
+do_off() {
+	local net=0 dhcp=0 dns=0 o
+	rm -f $SYSCTL
+	if applied; then
+		restore network.wan.iptype && net=1
+		restore network.lan.ip6assign && net=1
+		restore network.globals.ula_prefix && net=1
+		for o in ra dhcpv6 ndp; do restore dhcp.lan.$o && dhcp=1; done
+		restore 'dhcp.@dnsmasq[0].filter_aaaa' && dns=1
+		[ $net = 1 ] && uci commit network
+		[ $dhcp = 1 ] || [ $dns = 1 ] && uci commit dhcp
+		v6_on
+		uci -q delete $CFG.state
+		uci commit $CFG
+		logger -t e5-ipv6 'IPv6 back on'
+	fi
+	[ $net = 1 ] && $INIT/network reload >/dev/null 2>&1
+	[ $dhcp = 1 ] && $INIT/odhcpd reload >/dev/null 2>&1
+	[ $dns = 1 ] && $INIT/dnsmasq reload >/dev/null 2>&1
+	return 0
+}
+
+do_sync() {
+	if [ "$(setting enabled)" = 1 ]; then
+		do_on "$(setting wan_ipv4)" "$(setting filter_aaaa)"
+	else
+		do_off
+	fi
+}
+
+do_status() {
+	local a=false v6
+	applied && a=true
+	v6=$(ip -6 addr show scope global 2>/dev/null | grep -c ' inet6 ')
+	printf '{"applied":%s,"enabled":%s,"wan_proto":"%s","iptype":"%s","global_v6":%s,"default_off":%s}\n' \
+		$a "$([ "$(setting enabled)" = 1 ] && echo true || echo false)" \
+		"$(uci -q get network.wan.proto)" "$(uci -q get network.wan.iptype)" "${v6:-0}" \
+		"$(cat $CONF/default/disable_ipv6 2>/dev/null || echo 0)"
+}
+
+# the noipv6 app (and its uninstall guard, which would turn IPv6 back on) out
+do_migrate() {
+	local app=/etc/e5-infoscreen/plugins/noipv6
+	rm -f /etc/hotplug.d/iface/90-e5-noipv6 /usr/libexec/e5-noipv6
+	[ -d $app ] || [ -L /usr/share/e5-infoscreen/www/plugins/noipv6 ] || return 0
+	rm -rf $app /usr/share/e5-infoscreen/www/plugins/noipv6
+	logger -t e5-ipv6 'the noipv6 app removed: 禁用 IPv6 is built in (高级 -> 网络)'
+}
+
+case "$1" in
+	sync) do_sync ;;
+	on) do_on "$2" "$3" ;;
+	off) do_off ;;
+	ifup) applied && v6_off ;;
+	status) do_status ;;
+	migrate) do_migrate ;;
+	*) sed -n '2,24p' "$0"; exit 2 ;;
+esac

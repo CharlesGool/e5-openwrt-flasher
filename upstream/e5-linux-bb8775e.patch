@@ -1,0 +1,126 @@
+diff --git a/openwrt/build-bluez.sh b/openwrt/build-bluez.sh
+index f4d56a2..0b65502 100755
+--- a/openwrt/build-bluez.sh
++++ b/openwrt/build-bluez.sh
+@@ -34,7 +34,8 @@ for p in "$TOP"/device/debian_device_common/patches/bluez-0*.patch; do
+     n=$((n + 1))
+ done
+ 
+-docker run --rm --platform linux/arm64 -v e5-openwrt-src:/build \
++case "$(uname -m)" in x86_64) PLAT=linux/amd64;; *) PLAT=linux/arm64;; esac
++docker run --rm --platform $PLAT -v e5-openwrt-src:/build \
+     -v "$WORK":/work:ro -v "$OUT":/out -e E5REV="$E5REV" \
+     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
+     debian:trixie bash -euc '
+diff --git a/openwrt/build-hostapd-inner.sh b/openwrt/build-hostapd-inner.sh
+old mode 100644
+new mode 100755
+index df65b5d..27f4761
+--- a/openwrt/build-hostapd-inner.sh
++++ b/openwrt/build-hostapd-inner.sh
+@@ -33,14 +33,33 @@ hostapd_make() {
+     make CONFIG_DRIVER_11AC_SUPPORT=y CONFIG_DRIVER_11AX_SUPPORT=y \
+         CONFIG_DRIVER_11BE_SUPPORT=y "$@"
+ }
++# The SAE source change goes in as a patch of the package (patches/990-unisoc-sae.patch), which every
++# prepare applies: patching the unpacked tree is not enough -- the compile prepares it again (after
++# hostapd's dependencies are built) from the tarball, and wpad came out without unisoc_sae.
++SAE_PATCH=$H/patches/990-unisoc-sae.patch
++rm -f "$SAE_PATCH"
+ hostapd_make "$H/clean"
+ hostapd_make "$H/prepare" V=s
+ source_dir=$(find build_dir/target-* -mindepth 2 -maxdepth 2 -type d -path '*/hostapd-wpad-basic-mbedtls/hostapd-*')
+ [ -n "$source_dir" ] && [ "$(printf '%s\n' "$source_dir" | wc -l)" = 1 ] || {
+     echo 'Unisoc WPA3: expected one prepared basic-mbedtls source' >&2; exit 1;
+ }
+-python3 /src/patch-hostapd-sae.py source "$source_dir"
++rm -rf /tmp/unisoc-sae && mkdir -p /tmp/unisoc-sae
++cp -a "$source_dir" /tmp/unisoc-sae/a && cp -a "$source_dir" /tmp/unisoc-sae/b
++python3 /src/patch-hostapd-sae.py source /tmp/unisoc-sae/b
++rc=0; (cd /tmp/unisoc-sae && diff -ruN -x '.*' a b) > "$SAE_PATCH" || rc=$?
++[ "$rc" = 1 ] && grep -q unisoc_sae "$SAE_PATCH" || { echo 'Unisoc WPA3: no source patch made' >&2; exit 1; }
++rm -rf /tmp/unisoc-sae
++hostapd_make "$H/clean"
+ hostapd_make -j"$JOBS" "$H/compile" V=s
++# the daemon that was built has it: its source, and the config key in the binary
++grep -q '"unisoc_sae"' "$source_dir/hostapd/config_file.c" || {
++    echo 'Unisoc WPA3: the compiled source has no unisoc_sae' >&2; exit 1;
++}
++bin=$(find build_dir/target-*/hostapd-wpad-basic-mbedtls -path '*/ipkg-*/usr/sbin/wpad' -type f | head -n1)
++[ -n "$bin" ] && grep -aq unisoc_sae "$bin" || {
++    echo "Unisoc WPA3: the wpad binary does not know unisoc_sae (${bin:-no binary})" >&2; exit 1;
++}
+ make "$W/clean"
+ make -j"$JOBS" "$W/compile" V=s
+ stage=$(mktemp -d /out/.wifi-sae.XXXXXX)
+diff --git a/openwrt/build-rootfs.sh b/openwrt/build-rootfs.sh
+index a11582b..8896187 100755
+--- a/openwrt/build-rootfs.sh
++++ b/openwrt/build-rootfs.sh
+@@ -82,6 +82,10 @@ fi
+ WORK="$TOP/work/openwrt"
+ OUT="$TOP/out/openwrt"
+ URL=https://downloads.openwrt.org/releases/$VER/targets/armsr/armv8
++# E5_WRT_MIRROR=https://mirrors.ustc.edu.cn/openwrt: packages and the rootfs tarball from a mirror of
++# downloads.openwrt.org while building (checksums and signatures still OpenWrt's); the image keeps the
++# official feeds.  The packages apk downloads stay in work/openwrt/apk-cache for the next build.
++WRT_MIRROR=${E5_WRT_MIRROR:-}
+ TARBALL=openwrt-$VER-armsr-armv8-rootfs.tar.gz
+ BUSYBOX=${E5_BUSYBOX:-$TOP/work/busybox/ext/usr/bin/busybox}
+ # the info screen, from its own repository, when it is there (E5_INFOSCREEN=
+@@ -106,7 +110,7 @@ IMAGE_MB=${E5_IMAGE_MB:-$DEFAULT_IMAGE_MB}
+ FIRMWARE=${E5_FIRMWARE:-$OVERLAY/lib/firmware}
+ ANDROID=${E5_ANDROID_SUBSET:-$TOP/work/android-subset}
+ KBUILD=${E5_KBUILD:-$TOP/out_linux}
+-mkdir -p "$WORK" "$OUT"
++mkdir -p "$WORK" "$OUT" "$WORK/apk-cache"
+ python3 "$TOP/tools/openwrt-package-state.py" check "$VER"
+ BLOCK_APK="$OUT/block-mount-guarded.apk"
+ E5_WRT_VER="$VER" sh "$HERE/build-block-mount.sh" "$BLOCK_APK"
+@@ -135,10 +139,11 @@ ls "$OUT"/modemmanager-1*.apk >/dev/null 2>&1 || {
+ [ -x "$BUSYBOX" ] || { echo "no static busybox at $BUSYBOX (E5_BUSYBOX=...)" >&2; exit 1; }
+ 
+ if [ ! -f "$WORK/$TARBALL" ]; then
+-    curl -fL -o "$WORK/$TARBALL.part" "$URL/$TARBALL"
++    TB_URL=$URL; [ -z "$WRT_MIRROR" ] || TB_URL=$WRT_MIRROR/releases/$VER/targets/armsr/armv8
++    curl -fL -o "$WORK/$TARBALL.part" "$TB_URL/$TARBALL"
+     mv "$WORK/$TARBALL.part" "$WORK/$TARBALL"
+ fi
+-want=$(curl -fsSL "$URL/sha256sums" | sed -n "s/^\([0-9a-f]*\) \*$TARBALL$/\1/p")
++want=$(curl -fsSL --retry 5 --retry-all-errors "$URL/sha256sums" | sed -n "s/^\([0-9a-f]*\) \*$TARBALL$/\1/p")
+ have=$(shasum -a 256 "$WORK/$TARBALL" 2>/dev/null || sha256sum "$WORK/$TARBALL")
+ [ -n "$want" ] && [ "${have%% *}" = "$want" ] || { echo "checksum mismatch for $TARBALL" >&2; exit 1; }
+ 
+@@ -178,7 +183,7 @@ if [ "${E5_ROOT_MODULES_ONLY:-0}" = 1 ]; then
+     ROOT_REL=$(basename "$1")
+     if [ "$FEATURES" = 1 ]; then
+         case "$ROOT_REL" in
+-            *-e5-mobile[0-9]*) ;;
++            *-e5-mobile[0-9]*|*-e5-sleep[0-9]*) ;;
+             *) echo 'E5_FEATURES requires the device/linux_device_e5 kernel, not donor board modules' >&2; exit 1 ;;
+         esac
+         [ -f "$1/aw32257_charger.ko" ] && [ -f "$1/audio/snd-soc-sprd-pa-aw87xxx.ko" ] || {
+@@ -298,8 +303,12 @@ docker run --rm --platform linux/arm64 \
+     -v "$SA":/in/sa:ro -e STANDALONE="$STANDALONE" -v "$RM":/in/root-modules:ro \
+     -v "$WORK/extra":/in/extra:ro -e EXTRA_LIST="$EXTRA_LIST" -v "$TP":/in/transplant:ro \
+     -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
+-    e5-openwrt-base:$VER /bin/sh -euc '
++    -e WRT_MIRROR="$WRT_MIRROR" -v "$WORK/apk-cache":/build/apk-cache     e5-openwrt-base:$VER /bin/sh -euc '
+ mkdir -p /var/lock /var/run /tmp
++FEEDS=/etc/apk/repositories.d/distfeeds.list
++cp $FEEDS /tmp/distfeeds.official
++[ -z "$WRT_MIRROR" ] || sed -i "s#https://downloads.openwrt.org#$WRT_MIRROR#" $FEEDS
++ln -sfn /build/apk-cache /etc/apk/cache
+ attempt=1
+ until apk update >/dev/null; do
+     [ "$attempt" -lt 4 ] || exit 1
+@@ -377,6 +386,9 @@ fi
+ # (apk info <name> describes the repository'"'"'s package; the installed one is here)
+ echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/installed) installed"
+ 
++# (the image: the official feeds, no build cache)
++cp /tmp/distfeeds.official $FEEDS
++rm -f /etc/apk/cache
+ R=/build/root; mkdir -p $R
+ # the live filesystem of this container (OpenWrt and the packages), without the runtime mounts
+ for e in /*; do
