@@ -15,7 +15,7 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.4, sidekey 1.3, powermon 1.2, navbar 1.4.
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.5, sidekey 1.3, powermon 1.4, navbar 1.5.
 >   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 2.9, webapps 1.6.
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out
