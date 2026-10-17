@@ -44,8 +44,8 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 | 版本 | 下载 | 说明 |
 |---|---|---|
 | **e5-sleep8** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8) | 网页升级；USB 关闭（不充电）与插线深度休眠；升级保留流量统计等用户数据；功率监测修正 |
-| e5-sleep4 | [e5-sleep-kernel Release](https://github.com/CharlesGool/e5-sleep-kernel/releases/tag/e5-sleep4) | 官方 2026-10-13 包 + 内核 0001–0007（芯片级休眠） |
-| e5-sleep2 | [e5-sleep-kernel Release](https://github.com/CharlesGool/e5-sleep-kernel/releases/tag/e5-sleep2) | 官方 2026-10-13 包 + 内核 0001–0005 |
+| e5-sleep4 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep4) | 官方 2026-10-13 包 + 内核 0001–0007（芯片级休眠） |
+| e5-sleep2 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep2) | 官方 2026-10-13 包 + 内核 0001–0005 |
 
 （e5-sleep5–7 是 e5-sleep8 之前的中间版本，没有公开发布。）
 
