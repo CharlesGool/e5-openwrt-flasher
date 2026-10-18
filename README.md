@@ -68,6 +68,15 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
   - USB 角色可选「关闭（仅充电）」和 **「关闭（不充电）」**。后者把数据和充电都关掉，整机由电池供电，配合 0009 插着线也能深度休眠，适合长期插在电源上的设备。
 - **充电保护** 新增强制停充（`e5-charge` 的 `block` 选项），「关闭（不充电）」用的就是它。
 
+<p>
+<img src="images/hotspot-saver.png" width="240" alt="热点省电">
+<img src="images/usb-role.png" width="240" alt="USB 角色：关闭（仅充电）/ 关闭（不充电）">
+<img src="images/cpu-offline.png" width="240" alt="CPU 关闭核心">
+<img src="images/overview-cpu.png" width="240" alt="概览：CPU 在线 4/8">
+</p>
+
+*热点省电 · USB 角色（新增「关闭（不充电）」）· CPU 关闭核心 · 关闭核心后概览里的 CPU 状态*
+
 ### 4. 系统功能（原来是要另装的应用，现在内置）
 
 | 功能 | 版本 | 说明 |
@@ -85,6 +94,26 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
   - **充电**：功率监测采样间隔。
 - 界面补丁在镜像里已经打好，首次开机不会再重启屏幕。
 
+<p>
+<img src="images/powermon-card.png" width="240" alt="详细信息页的功率监测">
+<img src="images/keys-sidekey.png" width="240" alt="高级 → 按键：侧键">
+<img src="images/keys-volume.png" width="240" alt="高级 → 按键：音量键">
+</p>
+<p>
+<img src="images/navbar-setting.png" width="240" alt="高级 → 界面与锁屏 → 底部导航显示">
+<img src="images/ipv6-switch.png" width="240" alt="高级 → 网络：禁用 IPv6">
+</p>
+
+*「详细信息」页的功率监测（插着电但没在充电时按电池供电计入）· 高级 → 按键（侧键、音量键）· 底部导航 9 个 / 5 个 · 禁用 IPv6 开关*
+
+<img src="images/luci-apps.webp" width="760" alt="LuCI 应用管理：只剩热点省电、网络测试、网页版应用">
+
+*LuCI 应用管理：四个系统功能不再出现在应用列表里，只剩热点省电、网页版应用和上游内置的网络测试*
+
+<img src="images/luci-screen.png" width="520" alt="LuCI 远程画面里的功率监测卡片">
+
+*LuCI 的信息屏远程画面里同样能看到功率监测卡片*
+
 ### 5. 信息屏
 
 - 独立分支：**去掉在线更新**（高级 → 系统 里的检查更新 / 回退、概览的更新提示、LuCI 的上传更新），免得被官方版本覆盖。
@@ -98,6 +127,8 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 - **网页升级**：在 LuCI「系统 → E5 系统升级」上传这个 zip，系统会自动解压、按 SHA256SUMS 校验、检查机型，再按 `flash.cmd --update` 的步骤写 boot_b、换系统镜像，然后点「立即重启」，**不再需要电脑**。
   刷机包存在 userdata 里，不占内存；空间不够时会先提示，不会只写一半。
   「备份 / 升级」里的「刷写新的固件」已停用（那是 armsr 通用版 sysupgrade，会刷坏 E5），配置备份照常能用。
+
+  <img src="images/luci-e5-upgrade.webp" width="760" alt="LuCI 系统 → E5 系统升级">
 - **升级保留更多数据**（网页升级和 `--update` 相同）。原版保留 `/etc/config`、密码、SSH 密钥、`/etc/e5`、vnstat、短信、信息屏应用，这里另外保留：
   - **用 apk 另装的软件包**（如 OpenClash）：新旧系统是同一个 OpenWrt 版本时，连同文件、数据库、`/etc` 下它们的目录和已启用的服务一起带过去；版本不同时，包名记在 `/etc/e5/apk-carry.list`，方便重装。被你替换掉的自带包（如 dnsmasq → dnsmasq-full）随之去掉；本包有意去掉的 PPPoE、GRUB 不会被带回来；
   - **流量统计和短信转发设置**（`/etc/unisoc-modem`）：原版每次升级都会清零；
