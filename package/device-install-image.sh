@@ -60,8 +60,17 @@ flock -n 9 || { echo 'another system upgrade is running' >&2; exit 1; }
 # The configuration of the OpenWrt at $1 into the new root $2 (/etc/config,
 # passwords, SSH keys, /etc/e5, the traffic records, the info screen's apps),
 # the new image's own version files kept.
+app_version() { sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1; }
+
+# is version $1 newer than $2 (dotted numbers; no $2: yes)
+version_newer() {
+    awk -v a="$1" -v b="$2" 'BEGIN { n = split(a, x, "."); m = split(b, y, "."); k = n > m ? n : m
+        for (i = 1; i <= k; i++) { if (x[i] + 0 > y[i] + 0) exit 0; if (x[i] + 0 < y[i] + 0) exit 1 }
+        exit 1 }'
+}
+
 keep_config() {
-    local from=$1 N=$2 f p phone
+    local from=$1 N=$2 f p phone bundled
     echo "== keeping the configuration of $from"
     # Keep installed apps and their data, but retain this image's bundled phone
     # code. Otherwise an update silently restores the previous voice fixes/UI.
@@ -69,6 +78,15 @@ keep_config() {
     if [ -f "$N/etc/e5-infoscreen/plugins/phone/manifest.json" ]; then
         cp -a "$N/etc/e5-infoscreen/plugins/phone/." "$phone/"
     fi
+    # (e5-sleep9: and the other apps this image brings, to put back where the old system has an
+    # older version of them -- the installed copy would otherwise replace the image's newer one)
+    bundled=$(mktemp -d /tmp/e5-img.apps.XXXXXX)
+    for p in "$N"/etc/e5-infoscreen/plugins/*/manifest.json; do
+        [ -f "$p" ] || continue
+        p=${p%/manifest.json}; p=${p##*/}
+        [ "$p" = phone ] && continue
+        cp -a "$N/etc/e5-infoscreen/plugins/$p" "$bundled/$p"
+    done
     for f in image-version image-form build-time; do
         cp "$N/etc/e5/$f" "/tmp/e5-img.$f" 2>/dev/null || rm -f "/tmp/e5-img.$f"
     done
@@ -118,6 +136,16 @@ keep_config() {
         cp -a "$phone/." "$N/etc/e5-infoscreen/plugins/phone/"
     fi
     rm -rf "$phone"
+    for p in "$bundled"/*/manifest.json; do
+        [ -f "$p" ] || continue
+        p=${p%/manifest.json}; p=${p##*/}
+        f=$(app_version "$N/etc/e5-infoscreen/plugins/$p/manifest.json")
+        version_newer "$(app_version "$bundled/$p/manifest.json")" "$f" || continue
+        rm -rf "$N/etc/e5-infoscreen/plugins/$p"
+        cp -a "$bundled/$p" "$N/etc/e5-infoscreen/plugins/$p"
+        echo "   $p: $(app_version "$bundled/$p/manifest.json") from this image in place of the installed $f"
+    done
+    rm -rf "$bundled"
     # (e5-sleep8: the apps removed on purpose -- the plugin tool's /etc/e5-infoscreen/removed-apps,
     # kept with /etc/e5-infoscreen -- out of the new image, its own copies of them too)
     if [ -f "$N/etc/e5-infoscreen/removed-apps" ]; then

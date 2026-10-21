@@ -1,9 +1,12 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep8)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep9)
 
 > An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `bb8775e`
 > (2026-10-16: WiFi, modem and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep9: hotspot power saver 3.1 (the radio goes off and the system deep-sleeps without a SIM too; no deep sleep
+> with the system on an SD card for now, which did not wake up from it); navbar 1.6 (Details shows as 详情 in the
+> nine-item bar). Same kernel as e5-sleep8.
 >
 > * Kernel `6.18.54-e5-sleep5-charles`: the official E5 build (linux-lts-e5 020b970 with bb8775e's adapters) plus eight patches --
 >   PMIC watchdog stopped in suspend, a DPU warning fixed, CPU idle states, the GPU power domain off in suspend, a camera
@@ -15,8 +18,8 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.5, sidekey 1.3, powermon 1.4, navbar 1.5.
->   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 2.9, webapps 1.6.
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.5, sidekey 1.3, powermon 1.4, navbar 1.6.
+>   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.1, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out
 > (/etc/e5/apk-removed.list). Installed copies of the four built-in apps are dropped on update (their settings stay).

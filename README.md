@@ -8,10 +8,12 @@
 
 ## 下载
 
-**当前版本 e5-sleep8**：[Openwrt_E5_Flasher_sleep8.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep8/Openwrt_E5_Flasher_sleep8.zip)
-（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8)）
+**当前版本 e5-sleep9**：[Openwrt_E5_Flasher_sleep9.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep9/Openwrt_E5_Flasher_sleep9.zip)
+（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9)）
 
-SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
+SHA-256 `1d6aa3577403b3ceb9bab6dc56e3468c2927dbd79a8ae185f178f0c096301ee2`
+
+e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时一夜不休眠；9 个底栏时「详细信息」显示不全；装在 SD 卡上深度休眠后睡死（暂时改为 SD 卡安装不深度休眠）。内核与 e5-sleep8 相同。
 
 ## 待机功耗
 
@@ -28,12 +30,12 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 
 ## 相对原版刷机包的改动
 
-“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。e5-sleep8 相对它的全部改动：
+“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。e5-sleep9 相对它的全部改动：
 
 ### 1. 系统：按上游新版从源码重建
 
 - **上游 e5-linux `bb8775e`（2026-10-16）**，比原版新三天：Wi-Fi、基带、短信、信息屏的修复，以及内核侧的显示、eMMC DMA、EIC、温度、SIPA、电量计、Wi-Fi SAE 适配。
-  OpenWrt 25.12.5、ModemManager 1.24.0-r930、BlueZ、信息屏 `1ca4d58`；镜像版本显示为 `bb8775e+e5-sleep8`。
+  OpenWrt 25.12.5、ModemManager 1.24.0-r930、BlueZ、信息屏 `1ca4d58`；镜像版本显示为 `bb8775e+e5-sleep9`。
 - **WPA3（SAE）热点能用**：上游构建脚本编 hostapd 时，SAE 的源码改动会在重新 prepare 时被冲掉，wpad 不认识 `unisoc_sae`，WPA3 热点起不来。
   这里改成 hostapd 的包补丁（每次 prepare 都会打上），构建时还检查 wpad 二进制里确实有这项改动。
 - **软件包**：
@@ -61,8 +63,8 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 
 ### 3. 休眠与充电
 
-- **预装[热点省电](https://github.com/CharlesGool/e5-hotspot-saver) 3.0**：
-  - 熄屏、关热点、射频已关时，挂起到内存深度休眠（挂起前后自动处理看门狗）；
+- **预装[热点省电](https://github.com/CharlesGool/e5-hotspot-saver) 3.1**：
+  - 熄屏、关热点、射频已关时，挂起到内存深度休眠（挂起前后自动处理看门狗）；没插 SIM 卡时也能休眠；
   - CPU 关闭核心；
   - 能识别电量计校准唤醒；
   - USB 角色可选「关闭（仅充电）」和 **「关闭（不充电）」**。后者把数据和充电都关掉，整机由电池供电，配合 0009 插着线也能深度休眠，适合长期插在电源上的设备。
@@ -84,7 +86,7 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 | 音量键 | 1.5 | 音量键调亮度，最低亮度再按音量 − 关闭屏幕；熄屏后屏蔽其他按键，只有音量 + 唤醒（内核模块 e5_keywake） |
 | 侧键开关热点 | 1.3 | 长按侧键开关热点，熄屏、按键锁定时也能用；长按时间、震动可调 |
 | 功率监测 | 1.4 | **在「详细信息」页**：当前功率；耗电与电量曲线（30 分钟 / 6 小时 / 24 小时）；本次充电；24 小时各状态平均。配色随亮色 / 暗色主题。插着电但没在充电（充电保护停充、充满后停充）时，按电池供电计入耗电，不再误报“充电器供电不够”。数据每 10 分钟存到 `/etc/e5/powermon`，重启、升级后保留。完整曲线和 CSV 在 LuCI「状态 → 功率监测」 |
-| 底部导航 | 1.5 | 9 个 / 5 个入口；切换后导航栏立即重排；LuCI「服务 → 信息屏应用 → 底部导航」显示并可修改当前模式 |
+| 底部导航 | 1.6 | 9 个 / 5 个入口（9 个时「详细信息」在底栏显示为「详情」）；切换后导航栏立即重排；LuCI「服务 → 信息屏应用 → 底部导航」显示并可修改当前模式 |
 | 禁用 IPv6 | — | 原 noipv6 应用，现在是「高级 → 网络」最下面的一个开关（移动网络只申请 IPv4，DNS 不返回 IPv6；默认开）。从装了 noipv6 应用的系统升级时，自动换成内置版，设置保留 |
 
 - 这几项不出现在应用界面、应用管理和 LuCI 的应用列表里，不能卸载，也不用单独安装。
@@ -134,6 +136,7 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
   - **流量统计和短信转发设置**（`/etc/unisoc-modem`）：原版每次升级都会清零；
   - **OpenWrt 标准保留清单**（各软件包的 `/lib/upgrade/keep.d` 和 `/etc/sysupgrade.conf`）：蓝牙配对、计划任务、dnsmasq.d、nftables.d、rc.local、sysctl.conf、hosts 等；
   - 功率监测的历史数据。
+- **包里带的应用比已装的新时，换成新的**（e5-sleep9 起，如热点省电）：以前的包是设备上已装的旧版本覆盖包里的新版本，设置都保留。
 - **卸载过的应用不会被装回来**：原版每次升级都会把自带的“电话”装回去；这里卸载过的应用记在 `/etc/e5-infoscreen/removed-apps`，升级时跳过。
 - 从 Android 切回 OpenWrt 要用本包的 `--boot-openwrt`（或 Magisk 切回模块）：原版包会因 boot_b 的哈希不同而拒绝。
 
@@ -141,6 +144,7 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 
 ## 已知问题
 
+- **系统装在 SD 卡上（刷机包默认的安装方式）时暂不深度休眠**：SD 卡安装从深度休眠唤醒不了、只能强制重启，原因还在查；e5-sleep9 的热点省电 3.1 检测到 SD 卡安装就不进深度休眠（状态显示“系统在 SD 卡上，暂不支持”）。需要深度休眠的话用 `--data` 装到手机存储。
 - USB「关闭（不充电）」切换后，数据立即关闭，但要等约 30 秒才真正停充。
 - 禁用 IPv6 时，ModemManager 建的 `wan_6` 接口会反复重试 DHCPv6，系统日志较多，不影响使用。
 - 插着线深度休眠（0009）还没有做长时间实测。
@@ -161,7 +165,8 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| **e5-sleep8** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8) | 网页升级；USB 关闭（不充电）与插线深度休眠；升级保留流量统计等用户数据；功率监测修正 |
+| **e5-sleep9** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9) | 没插 SIM 卡也能深度休眠；底栏「详情」；SD 卡安装暂不深度休眠；升级时包里更新的应用替换旧的 |
+| e5-sleep8 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8) | 网页升级；USB 关闭（不充电）与插线深度休眠；升级保留流量统计等用户数据；功率监测修正 |
 | e5-sleep4 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep4) | 官方 2026-10-13 包 + 内核 0001–0007（芯片级休眠） |
 | e5-sleep2 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep2) | 官方 2026-10-13 包 + 内核 0001–0005 |
 
@@ -169,7 +174,7 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
 
 ## 自己做刷机包
 
-需要 x86_64 Linux + Docker（arm64 用 qemu-user-static）。大致流程（e5-sleep8）：
+需要 x86_64 Linux + Docker（arm64 用 qemu-user-static）。大致流程（e5-sleep9；内核与 e5-sleep8 相同）：
 
 1. **内核**：[e5-sleep-kernel](https://github.com/CharlesGool/e5-sleep-kernel) 的 `build/build-e5.sh sleep8 -e5-sleep8-charles 6`，
    再用 e5-linux `upstream/stage-root-modules.py` 生成 `root-modules.tar`。
@@ -183,7 +188,7 @@ SHA-256 `029bd2bc86a70eee276e57231c0f6fd18bf73acf4b980191738682da830c1d2e`
      E5_STANDALONE=1 E5_DEVICE_FILES=0 [E5_WRT_MIRROR=https://mirrors.ustc.edu.cn/openwrt] bash openwrt/build-rootfs.sh
    ```
 
-3. **后处理**：[build/make-rootfs-sleep8.sh](build/make-rootfs-sleep8.sh)：删 PPPoE / GRUB、加 SFTP；
+3. **后处理**：[build/make-rootfs-sleep9.sh](build/make-rootfs-sleep9.sh)（e5-sleep8 的流程，换底部导航 1.6、热点省电 3.1）：删 PPPoE / GRUB、加 SFTP；
    [patch-infoscreen-sleep5.py](build/patch-infoscreen-sleep5.py) 到 [sleep8](build/patch-infoscreen-sleep8.py) 依次改信息屏；
    [builtin-apps-sleep6.py](build/builtin-apps-sleep6.py) 把四个应用做成系统功能；[overlay/](overlay) 是加进系统的文件；预装应用；改 SIM 状态时间戳。
 4. **启动镜像**：[build/repack-boot.py](build/repack-boot.py) 以官方 boot.img 为底，只换内核和 initramfs 里的模块。
