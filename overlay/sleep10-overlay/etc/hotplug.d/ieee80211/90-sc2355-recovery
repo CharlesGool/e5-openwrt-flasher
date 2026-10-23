@@ -1,0 +1,82 @@
+#!/bin/sh
+# Firmware-reset recovery; no polling and no action on ordinary station events.
+#
+# After a WCN (SC2355/Marlin3) firmware assert the kernel resets the chip and the
+# Wi-Fi driver sends SC2355_RECOVERY=1 from the wiphy (kernel patch 0010: from
+# the platform device before, which never reached this script).  The radio is
+# reopened -- wifi down, wifi up -- and the driver's power-on clears hif->exit.
+#
+# e5-sleep10: the firmware may assert again within seconds of coming back (seen:
+# 13 s, on the next client's DHCP).  Up to RECENT_MAX recoveries in RECENT_S are
+# done at once; beyond that one is deferred to the end of the window instead of
+# dropped (dropped, the radio stayed dead); more than BURST_MAX in BURST_S and it
+# gives up (the hotspot app's own check reloads the driver later).
+[ "$ACTION" = change ] && [ "$SC2355_RECOVERY" = 1 ] || exit 0
+case "$DEVPATH" in */ieee80211/phy[0-9]*) ;; *) exit 0 ;; esac
+
+. /lib/functions.sh
+
+RECENT_S=120
+RECENT_MAX=3
+BURST_S=600
+BURST_MAX=8
+
+uptime_s() { local u; read -r u _ < /proc/uptime; echo "${u%%.*}"; }
+
+# the recoveries of $1 within the last $2 s (the history: one uptime a line)
+count_since() {
+	local now=$(uptime_s)
+	awk -v since=$((now - $2)) '$1 >= since { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+reopen() {
+	local section="$1" disabled
+	logger -t sc2355-recovery "Firmware reset on $section; reopening wireless radio"
+	wifi down "$section" || return 1
+	# Allow the WCN reset notifier/SDIO removal to finish before powering up.
+	sleep 1
+	config_load wireless
+	config_get_bool disabled "$section" disabled 0
+	[ "$disabled" = 0 ] || return 0
+	wifi up "$section"
+}
+
+recover_radio() {
+	local section="$1" path type disabled now hist wait
+	config_get type "$section" type
+	config_get path "$section" path
+	[ "$type" = mac80211 ] && [ -n "$path" ] || return 0
+	case "$radio_device" in */"$path") ;; *) return 0 ;; esac
+	config_get_bool disabled "$section" disabled 0
+	[ "$disabled" = 0 ] || return 0
+	hist="/tmp/sc2355-recovery-$section.hist"
+	now=$(uptime_s)
+	# (only what the windows look at)
+	[ -f "$hist" ] && awk -v since=$((now - BURST_S)) '$1 >= since' "$hist" > "$hist.new" && mv -f "$hist.new" "$hist"
+	if [ "$(count_since "$hist" "$BURST_S")" -ge "$BURST_MAX" ]; then
+		logger -t sc2355-recovery "$BURST_MAX firmware resets on $section in ${BURST_S}s; automatic retry stopped"
+		return 0
+	fi
+	if [ "$(count_since "$hist" "$RECENT_S")" -ge "$RECENT_MAX" ]; then
+		# (one deferred retry at a time: the later events only find it pending)
+		[ -f "/tmp/sc2355-recovery-$section.pending" ] && return 0
+		# (until the oldest recovery of the window has left it)
+		wait=$(awk -v now="$now" -v win="$RECENT_S" '$1 >= now - win && (o == "" || $1 < o) { o = $1 }
+			END { w = o + win - now; print (w > 5 ? w : 5) }' "$hist")
+		: > "/tmp/sc2355-recovery-$section.pending"
+		logger -t sc2355-recovery "Repeated firmware reset on $section; reopening in ${wait}s"
+		( sleep "$wait"; rm -f "/tmp/sc2355-recovery-$section.pending"
+		  echo "$(uptime_s)" >> "$hist"; reopen "$section" ) </dev/null >/dev/null 2>&1 9>&- &
+		return 0
+	fi
+	echo "$now" >> "$hist"
+	reopen "$section"
+}
+
+(
+	flock -n 9 || exit 0
+	radio_device="$(readlink -f "/sys$DEVPATH/device")"
+	[ -n "$radio_device" ] || exit 0
+	config_load wireless
+	config_foreach recover_radio wifi-device
+) 9>/tmp/sc2355-recovery.lock
