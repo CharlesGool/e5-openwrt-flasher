@@ -8,10 +8,12 @@
 
 ## 下载
 
-**当前版本 e5-sleep9**：[Openwrt_E5_Flasher_sleep9.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep9/Openwrt_E5_Flasher_sleep9.zip)
-（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9)）
+**当前版本 e5-sleep10**：[Openwrt_E5_Flasher_sleep10.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep10/Openwrt_E5_Flasher_sleep10.zip)
+（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep10)）
 
-SHA-256 `1d6aa3577403b3ceb9bab6dc56e3468c2927dbd79a8ae185f178f0c096301ee2`
+SHA-256 `1c7da6231210b5b272395ce376b02f616761343e107b36c2a10cf406973e8536`
+
+e5-sleep10：**Wi-Fi 芯片崩溃后热点自动恢复**。芯片固件偶发崩溃复位后，热点以前会“开着但搜不到”，只能重启；现在约 2 秒内自己重开（见下文第 7 节）。升级进行中也不会进入深度休眠。
 
 e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时一夜不休眠；9 个底栏时「详细信息」显示不全；装在 SD 卡上深度休眠后睡死（暂时改为 SD 卡安装不深度休眠）。内核与 e5-sleep8 相同。
 
@@ -30,12 +32,12 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 
 ## 相对原版刷机包的改动
 
-“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。e5-sleep9 相对它的全部改动：
+“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。e5-sleep10 相对它的全部改动：
 
 ### 1. 系统：按上游新版从源码重建
 
 - **上游 e5-linux `bb8775e`（2026-10-16）**，比原版新三天：Wi-Fi、基带、短信、信息屏的修复，以及内核侧的显示、eMMC DMA、EIC、温度、SIPA、电量计、Wi-Fi SAE 适配。
-  OpenWrt 25.12.5、ModemManager 1.24.0-r930、BlueZ、信息屏 `1ca4d58`；镜像版本显示为 `bb8775e+e5-sleep9`。
+  OpenWrt 25.12.5、ModemManager 1.24.0-r930、BlueZ、信息屏 `1ca4d58`；镜像版本显示为 `bb8775e+e5-sleep10`。
 - **WPA3（SAE）热点能用**：上游构建脚本编 hostapd 时，SAE 的源码改动会在重新 prepare 时被冲掉，wpad 不认识 `unisoc_sae`，WPA3 热点起不来。
   这里改成 hostapd 的包补丁（每次 prepare 都会打上），构建时还检查 wpad 二进制里确实有这项改动。
 - **软件包**：
@@ -44,7 +46,7 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 
 ### 2. 内核：深度休眠（`6.18.54-e5-sleep8-charles`）
 
-官方 E5 内核构建流程（linux-lts-e5 `020b970`，加上游 bb8775e 的内核适配）加 9 个补丁。
+官方 E5 内核构建流程（linux-lts-e5 `020b970`，加上游 bb8775e 的内核适配）加 10 个补丁（0010 只改 Wi-Fi 驱动模块）。
 `boot.img` 以官方的为底，只换内核和 initramfs 里的 45 个模块；init、busybox、f2fs 工具逐字节不变。
 
 | 补丁 | 作用 |
@@ -58,12 +60,13 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 | 0007 | USB 数据关闭时，USB 状态机不再每 200 ms 空转、打日志 |
 | 0008 | 电量计休眠校准原来每 2320 秒把设备唤醒一次，改为约 9 小时一次（模块参数 `relax_cnt_threshold`，默认 8191，写 0 恢复原值） |
 | 0009 | USB 数据关闭时，插着线也能挂起（原来插着线就永远不休眠） |
+| 0010 | Wi-Fi 芯片崩溃复位后，驱动的恢复事件发到正确的设备上，系统才会自动重开 Wi-Fi（见第 7 节） |
 
 补丁、构建方法和测试数据在 [e5-sleep-kernel](https://github.com/CharlesGool/e5-sleep-kernel)。
 
 ### 3. 休眠与充电
 
-- **预装[热点省电](https://github.com/CharlesGool/e5-hotspot-saver) 3.1**：
+- **预装[热点省电](https://github.com/CharlesGool/e5-hotspot-saver) 3.2**：
   - 熄屏、关热点、射频已关时，挂起到内存深度休眠（挂起前后自动处理看门狗）；没插 SIM 卡时也能休眠；
   - CPU 关闭核心；
   - 能识别电量计校准唤醒；
@@ -129,6 +132,7 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 - **网页升级**：在 LuCI「系统 → E5 系统升级」上传这个 zip，系统会自动解压、按 SHA256SUMS 校验、检查机型，再按 `flash.cmd --update` 的步骤写 boot_b、换系统镜像，然后点「立即重启」，**不再需要电脑**。
   刷机包存在 userdata 里，不占内存；空间不够时会先提示，不会只写一半。
   「备份 / 升级」里的「刷写新的固件」已停用（那是 armsr 通用版 sysupgrade，会刷坏 E5），配置备份照常能用。
+  校验和升级进行中系统持有唤醒锁，不会进入深度休眠（e5-sleep10 起）。
 
   <img src="images/luci-e5-upgrade.webp" width="760" alt="LuCI 系统 → E5 系统升级">
 - **升级保留更多数据**（网页升级和 `--update` 相同）。原版保留 `/etc/config`、密码、SSH 密钥、`/etc/e5`、vnstat、短信、信息屏应用，这里另外保留：
@@ -141,6 +145,15 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 - 从 Android 切回 OpenWrt 要用本包的 `--boot-openwrt`（或 Magisk 切回模块）：原版包会因 boot_b 的哈希不同而拒绝。
 
 更详细的说明见包内 [README.zh-CN.md](package/README.zh-CN.md)（English: [README.md](package/README.md)）。
+
+### 7. Wi-Fi 崩溃自动恢复（e5-sleep10）
+
+Wi-Fi 芯片（SC2355 / Marlin3）在热点有流量时偶尔会固件崩溃，内核随即复位芯片。原版和 e5-sleep9 之前，复位后驱动一直卡住：热点看起来开着、实际搜不到，只能重启。
+
+- 上游 e5-linux（2026-10-16）加了恢复机制（驱动发 `SC2355_RECOVERY=1` 事件，`/etc/hotplug.d/ieee80211/90-sc2355-recovery` 重开 Wi-Fi），但事件发错了设备，脚本从没运行过；原版（10-13）则根本没有恢复机制。
+- **内核补丁 0010** 把事件改从 Wi-Fi 的 phy 设备发出，脚本就能收到：实测芯片复位后约 2 秒热点重新启用，手机自动重连。
+- **恢复脚本**：芯片刚复位后常会再崩一次（实测 13 秒内、客户端重连时）。上游脚本 60 秒内只恢复一次、第二次直接放弃，又会卡死；现在 2 分钟内最多 3 次立即恢复，再多就延后到窗口结束重试，10 分钟内 8 次才停止（防止硬件真坏时无限重试）。
+- **热点省电 3.2** 再兜底：热点开着时每 30 秒检查一次，Wi-Fi 卡住就重新加载驱动。
 
 ## 已知问题
 
@@ -165,7 +178,8 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| **e5-sleep9** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9) | 没插 SIM 卡也能深度休眠；底栏「详情」；SD 卡安装暂不深度休眠；升级时包里更新的应用替换旧的 |
+| **e5-sleep10** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep10) | Wi-Fi 芯片崩溃后约 2 秒自动恢复（内核 0010、恢复脚本重试、热点省电 3.2）；升级中不休眠 |
+| e5-sleep9 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9) | 没插 SIM 卡也能深度休眠；底栏「详情」；SD 卡安装暂不深度休眠；升级时包里更新的应用替换旧的 |
 | e5-sleep8 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8) | 网页升级；USB 关闭（不充电）与插线深度休眠；升级保留流量统计等用户数据；功率监测修正 |
 | e5-sleep4 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep4) | 官方 2026-10-13 包 + 内核 0001–0007（芯片级休眠） |
 | e5-sleep2 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep2) | 官方 2026-10-13 包 + 内核 0001–0005 |
@@ -174,7 +188,7 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 
 ## 自己做刷机包
 
-需要 x86_64 Linux + Docker（arm64 用 qemu-user-static）。大致流程（e5-sleep9；内核与 e5-sleep8 相同）：
+需要 x86_64 Linux + Docker（arm64 用 qemu-user-static）。大致流程（e5-sleep10；内核与 e5-sleep8 相同，Wi-Fi 模块另加 0010）：
 
 1. **内核**：[e5-sleep-kernel](https://github.com/CharlesGool/e5-sleep-kernel) 的 `build/build-e5.sh sleep8 -e5-sleep8-charles 6`，
    再用 e5-linux `upstream/stage-root-modules.py` 生成 `root-modules.tar`。
@@ -188,7 +202,7 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
      E5_STANDALONE=1 E5_DEVICE_FILES=0 [E5_WRT_MIRROR=https://mirrors.ustc.edu.cn/openwrt] bash openwrt/build-rootfs.sh
    ```
 
-3. **后处理**：[build/make-rootfs-sleep9.sh](build/make-rootfs-sleep9.sh)（e5-sleep8 的流程，换底部导航 1.6、热点省电 3.1）：删 PPPoE / GRUB、加 SFTP；
+3. **后处理**：[build/make-rootfs-sleep10.sh](build/make-rootfs-sleep10.sh)（e5-sleep9 的流程，换 0010 的 Wi-Fi 驱动、[overlay/sleep10-overlay](overlay/sleep10-overlay) 的恢复脚本与升级唤醒锁、热点省电 3.2）：删 PPPoE / GRUB、加 SFTP；
    [patch-infoscreen-sleep5.py](build/patch-infoscreen-sleep5.py) 到 [sleep8](build/patch-infoscreen-sleep8.py) 依次改信息屏；
    [builtin-apps-sleep6.py](build/builtin-apps-sleep6.py) 把四个应用做成系统功能；[overlay/](overlay) 是加进系统的文件；预装应用；改 SIM 状态时间戳。
 4. **启动镜像**：[build/repack-boot.py](build/repack-boot.py) 以官方 boot.img 为底，只换内核和 initramfs 里的模块。
