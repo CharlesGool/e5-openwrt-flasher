@@ -1,9 +1,11 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep10)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep11)
 
 > An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `bb8775e`
 > (2026-10-16: WiFi, modem and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep11: fewer chances for the Wi-Fi chip to stall -- the screen asks the driver for the hotspot's
+> stations once in 20 s (sooner for a new client) instead of at every refresh; measured 42 queries a minute down to about 2.
 > e5-sleep10: Wi-Fi comes back by itself after a chip firmware reset (it stayed up but silent until a reboot):
 > kernel patch 0010 sends the driver's recovery event where the recovery script listens, the script retries
 > instead of giving up on a second reset, hotspot power saver 3.2 checks as well. No deep sleep during an E5 系统升级.
@@ -22,7 +24,7 @@
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
 >   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.5, sidekey 1.3, powermon 1.4, navbar 1.6.
->   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.2, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
+>   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.3, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out
 > (/etc/e5/apk-removed.list). Installed copies of the four built-in apps are dropped on update (their settings stay).
