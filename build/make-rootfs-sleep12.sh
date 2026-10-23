@@ -82,7 +82,7 @@ chmod 644 mnt/etc/hotplug.d/iface/90-e5-ipv6 mnt/usr/share/e5-infoscreen/www/cha
 ln -sf ../init.d/e5-ipv6 mnt/etc/rc.d/S99e5-ipv6
 python3 patch-infoscreen-sleep5.py mnt
 # e5-sleep6: the four apps built in, their settings into the screen's categories
-python3 builtin-apps-sleep6.py mnt builtin12/volkeys-v1.6.tar.gz builtin12/sidekey-v1.3.tar.gz \
+python3 builtin-apps-sleep6.py mnt builtin12/volkeys-v1.6.tar.gz builtin12/sidekey-v1.4.tar.gz \
     builtin12/powermon-v1.4.tar.gz builtin12/navbar-v1.6.tar.gz
 python3 patch-infoscreen-sleep6.py mnt
 # e5-sleep7: the four hidden from the app lists, 功率监测 on the 详细信息 page

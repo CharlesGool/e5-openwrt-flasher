@@ -124,10 +124,12 @@ app_js = parts[0] + want + 'async function volumeKeyOrig(step) {' + parts[1]
 want = (PLUGINS / 'sidekey/patch.js').read_text(encoding='utf-8')
 app_js = once(app_js, '/* ---------- key lock ---------- */', want + '/* ---------- key lock ---------- */', 'app.js: key lock')
 (WWW / 'app.js').write_text(app_js, encoding='utf-8')
-# sidekey: early.html before mobile.js in index.html
+# sidekey: early.html before power-menu.js (else mobile.js) in index.html
 idx = (WWW / 'index.html').read_text(encoding='utf-8')
 want = (PLUGINS / 'sidekey/early.html').read_text(encoding='utf-8')
-idx = once(idx, '<script src="mobile.js"></script>', want + '<script src="mobile.js"></script>', 'index.html: mobile.js')
+# (sidekey 1.4: before power-menu.js, which takes every key but power and volume on a dark screen)
+anchor = '<script src="power-menu.js"></script>' if '<script src="power-menu.js"></script>' in idx else '<script src="mobile.js"></script>'
+idx = once(idx, anchor, want + anchor, 'index.html: ' + anchor)
 (WWW / 'index.html').write_text(idx, encoding='utf-8')
 # navbar (backend ensure_patch): patch.js before navigation(), two lines of it changed
 js = (WWW / 'mobile.js').read_text(encoding='utf-8')
