@@ -1,9 +1,12 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep11)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep12)
 
 > An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `bb8775e`
 > (2026-10-16: WiFi, modem and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep12: the kernel rebuilt whole as 6.18.54-e5-sleep12-charles (patches 0001-0010), named as the package;
+> with the screen cut off by volume − the other keys are masked only for a deep sleep (volkeys 1.6, hotspot
+> power saver 3.4): awake, the side key still switches the hotspot.
 > e5-sleep11: fewer chances for the Wi-Fi chip to stall -- the screen asks the driver for the hotspot's
 > stations once in 20 s (sooner for a new client) instead of at every refresh; measured 42 queries a minute down to about 2.
 > e5-sleep10: Wi-Fi comes back by itself after a chip firmware reset (it stayed up but silent until a reboot):
@@ -23,8 +26,8 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.5, sidekey 1.3, powermon 1.4, navbar 1.6.
->   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.3, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.6, sidekey 1.3, powermon 1.4, navbar 1.6.
+>   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.4, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out
 > (/etc/e5/apk-removed.list). Installed copies of the four built-in apps are dropped on update (their settings stay).
