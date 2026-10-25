@@ -1,0 +1,35 @@
+#!/bin/sh
+# Set the clock from the baseband's network time until NTP has (e5-sleep13).
+#
+# The E5 has no clock battery: with the battery out the RTC (in the PMIC) starts
+# over, and OpenWrt starts from the newest file in /etc (sysfixtime) until ntpd
+# answers -- which needs mobile data and a reachable server.  The baseband keeps
+# the network's time (NITZ, AT+CTZU=1): AT+CCLK? answers "yy/MM/dd,hh:mm:ss+zz",
+# on this CP in UTC with the zone after it in quarter hours (+32: UTC+8) -- not
+# the local time 27.007 describes; measured against NTP on 2026-10-25 (within a
+# minute).  ModemManager reads it as local time (mmcli --time is 8 h off), so the
+# AT reply is used here, through /opt/e5/e5-at (the channel's owner).
+#
+# Every 30 s for 20 min, until ntpd has a stratum (ntpd-hotplug's file): when the
+# baseband's time is not older than this image and more than a minute ahead of
+# the clock, set the clock and the RTC from it, once; ntpd refines it later.
+# Behind the clock is left alone: before the baseband has the network's time it
+# may answer an older one.
+VALID=/var/state/dnsmasqsec
+floor=$(date -r "$0" +%s)
+i=0
+while [ $i -lt 40 ]; do
+	[ -e "$VALID" ] && exit 0
+	r=$(/opt/e5/e5-at "AT+CCLK?" 2>/dev/null | sed -n 's/^+CCLK: *"\([0-9][0-9]\)\/\([0-9][0-9]\)\/\([0-9][0-9]\),\([0-9][0-9]:[0-9][0-9]:[0-9][0-9]\).*/20\1-\2-\3 \4/p')
+	t=$( [ -n "$r" ] && date -u -d "$r" +%s 2>/dev/null)
+	now=$(date +%s)
+	if [ -n "$t" ] && [ "$t" -ge "$floor" ] && [ "$t" -gt $((now + 60)) ]; then
+		was=$(date)
+		date -u -s "$r" >/dev/null && hwclock -w -u
+		logger -t e5-modem-time "clock set from the baseband's network time: $(date) (was $was)"
+		exit 0
+	fi
+	i=$((i + 1))
+	sleep 30
+done
+exit 0

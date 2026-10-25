@@ -1,0 +1,15 @@
+#!/bin/sh
+# e5-sleep13: NTP servers reachable from China first.  The OpenWrt pool alone is
+# often slow or unreachable over Chinese mobile networks, and the E5 has no clock
+# battery: with the battery out the clock starts from the newest file in /etc
+# (sysfixtime) until NTP answers.  Once per configuration (an update keeps
+# /etc/config and runs this again; the servers are added only where missing).
+uci -q get system.ntp >/dev/null || exit 0
+list=$(uci -q get system.ntp.server)
+case " $list " in *" ntp.aliyun.com "*) exit 0 ;; esac
+uci -q delete system.ntp.server
+for s in ntp.aliyun.com ntp.tencent.com $list; do
+	uci add_list system.ntp.server="$s"
+done
+uci commit system
+exit 0

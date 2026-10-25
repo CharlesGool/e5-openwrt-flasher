@@ -6,12 +6,20 @@
 *An unofficial one-click OpenWrt flash package for the Rongyue E5: the system rebuilt from upstream e5-linux, the
 [deep sleep kernel](https://github.com/CharlesGool/e5-sleep-kernel), the info-screen extras built in, and updates from LuCI.*
 
+> [!WARNING]
+> **⚠️ 强烈建议刷到内置存储，不要刷到 SD 卡。** 系统装在 SD 卡上可能出现各种奇怪的问题（例如深度休眠后唤醒不了、只能强制重启，所以 SD 卡上已禁用深度休眠）。
+> 刷机包直接运行 `flash.cmd` / `./flash.sh` **默认装到 SD 卡**；装到内置存储请运行 **`install-userdata.cmd`**（Windows）或 **`bash install-userdata.sh`**（macOS / Linux），即 `flash.cmd --data` / `./flash.sh --data`。
+
 ## 下载
 
-**当前版本 e5-sleep11**：[Openwrt_E5_Flasher_sleep11.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep11/Openwrt_E5_Flasher_sleep11.zip)
-（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep11)）
+**当前版本 e5-sleep13**：[Openwrt_E5_Flasher_sleep13.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep13/Openwrt_E5_Flasher_sleep13.zip)
+（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep13)）
 
-SHA-256 `aa04bc7fba67e45075980bf8674f1645ac9c998b08d00d8dbc45028308b88006`
+SHA-256 `f57cfc41d0edaeb8c283a92dec1f58117e79babe94ff6e862cb0b5631d0196c1`
+
+e5-sleep13：**充满电时电量校准到 100%**。上游充电管理里“充满就把电量计校准为满”的代码从不执行，电量计一旦估偏（比如取过电池），电池充满了也只显示五六十；内核补丁 0011 让它在充满保持 1 分钟后校准（实测故意把电量计设成 50%，恢复充电 61 秒后回到 100%）。**时间**：先用阿里云、腾讯的 NTP 服务器；没有数据网络时，从基带取运营商下发的网络时间，取过电池后不再停在旧时间。
+
+e5-sleep12：内核完整重编并改名为 `-e5-sleep12-charles`；音量 − 关屏后只在深度休眠期间屏蔽按键；熄屏时长按侧键又能开关热点（侧键 1.4）。
 
 e5-sleep11：**减少触发 Wi-Fi 芯片崩溃的机会**。信息屏以前每次刷新（熄屏也每 5 秒）都向 Wi-Fi 芯片逐个查询已连接设备，现在缓存 20 秒、新设备连上立即更新，热点省电 3.3 也复用这份结果；3 台设备实测从每分钟约 42 次降到约 2 次（见第 7 节）。
 

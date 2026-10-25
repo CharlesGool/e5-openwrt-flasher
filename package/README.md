@@ -1,9 +1,20 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep12)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep13)
+
+> [!WARNING]
+> **⚠️ Install into the internal storage, not onto an SD card.** A system on an SD card can show all kinds of odd problems
+> (it did not wake up from deep sleep, so deep sleep is off there). `flash.cmd` / `./flash.sh` **install onto the SD card by
+> default**; for the internal storage run **`install-userdata.cmd`** (Windows) or **`bash install-userdata.sh`** (macOS / Linux),
+> that is `flash.cmd --data` / `./flash.sh --data`.
 
 > An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `bb8775e`
 > (2026-10-16: WiFi, modem and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep13: a full charge sets the capacity to 100 % (kernel patch 0011: upstream charger-manager's check that
+> sets the fuel gauge to full at the charger's end voltage and current never ran, so a gauge that had drifted --
+> after the battery was out, say -- stayed at 50-60 % on a full battery); NTP servers reachable from China first, and
+> without mobile data the clock from the network time the baseband has (no stale clock after the battery was out);
+> kernel 6.18.54-e5-sleep13-charles (0001-0011), volkeys 1.7.
 > e5-sleep12: the kernel rebuilt whole as 6.18.54-e5-sleep12-charles (patches 0001-0010), named as the package;
 > with the screen cut off by volume − the other keys are masked only for a deep sleep (volkeys 1.6, hotspot
 > power saver 3.4): awake, the side key still switches the hotspot, now also with the screen dark
@@ -27,7 +38,7 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.6, sidekey 1.4, powermon 1.4, navbar 1.6.
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.7, sidekey 1.4, powermon 1.4, navbar 1.6.
 >   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.4, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out
