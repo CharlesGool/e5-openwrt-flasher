@@ -12,10 +12,12 @@
 
 ## 下载
 
-**当前版本 e5-sleep13**：[Openwrt_E5_Flasher_sleep13.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep13/Openwrt_E5_Flasher_sleep13.zip)
-（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep13)）
+**当前版本 e5-sleep14**：[Openwrt_E5_Flasher_sleep14.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep14/Openwrt_E5_Flasher_sleep14.zip)
+（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep14)）
 
-SHA-256 `f57cfc41d0edaeb8c283a92dec1f58117e79babe94ff6e862cb0b5631d0196c1`
+SHA-256 `02bb9e0217a4978560157df6e6bf6071897ce356d1e006a83f19dcfee126fd58`
+
+e5-sleep14：**合并上游 e5-linux `5ac9d504`（2026-10-18）**：按 SIM 卡分别设置 APN 和射频、数据网络断了自动恢复、ModemManager E5 适配 rev 34、信息屏（无 SIM 卡的显示、按 SIM 卡统计流量、唤醒后刷新），以及 Wi-Fi 组播流控 / SAE、SIPA、SD 卡供电、eMMC 和显示 DMA、温控等修复；内核换到上游新基线 `e5-6.18`（上游已收录我们的 0001–0005 和满电校准，这里再加 0006–0010）。**修复 `install-userdata` 报 `BOOTCHAIN-ERROR: another boot-chain operation is active`**：以前安装中途被打断（关了窗口、拔了线、手机重启）会留下一个锁，之后每次安装都卡在这里；现在认出锁的进程已经不在就自动清掉。用旧版包遇到这个错误的，在 Android 的 root shell 里执行 `rm -rf /data/local/tmp/e5-bootchain.lock` 再重新安装。
 
 e5-sleep13：**充满电时电量校准到 100%**。上游充电管理里“充满就把电量计校准为满”的代码从不执行，电量计一旦估偏（比如取过电池），电池充满了也只显示五六十；内核补丁 0011 让它在充满保持 1 分钟后校准（实测故意把电量计设成 50%，恢复充电 61 秒后回到 100%）。**时间**：先用阿里云、腾讯的 NTP 服务器；没有数据网络时，从基带取运营商下发的网络时间，取过电池后不再停在旧时间。
 
@@ -42,7 +44,7 @@ e5-sleep9 修正了 e5-sleep8 发布后用户反馈的问题：没插 SIM 卡时
 
 ## 相对原版刷机包的改动
 
-“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。e5-sleep11 相对它的全部改动：
+“原版”指官方 Openwrt_E5_Flasher（2026-10-13，e5-linux `359ae54`，内核 `6.18.54-e5-mobile4`）。下面以 e5-sleep11 为准介绍相对它的改动（e5-sleep12 起的变化见上文“下载”）：
 
 ### 1. 系统：按上游新版从源码重建
 
@@ -189,7 +191,10 @@ Wi-Fi 芯片（SC2355 / Marlin3）在热点有流量时偶尔会固件崩溃，�
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| **e5-sleep11** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep11) | 信息屏少向 Wi-Fi 芯片查询已连接设备（约 42 次/分 → 2 次/分），减少崩溃触发；热点省电 3.3 |
+| **e5-sleep14** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep14) | 合并上游 e5-linux 5ac9d504 和新内核基线 e5-6.18（+0006–0010）；安装被打断留下的锁自动清除；音量键 1.8 |
+| e5-sleep13 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep13) | 充满电时电量校准到 100%（0011）；国内 NTP 服务器、没有数据网络时用基带网络时间；音量键 1.7 |
+| e5-sleep12 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep12) | 内核完整重编为 -e5-sleep12-charles；只在深度休眠时屏蔽按键；熄屏长按侧键开关热点（侧键 1.4） |
+| e5-sleep11 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep11) | 信息屏少向 Wi-Fi 芯片查询已连接设备（约 42 次/分 → 2 次/分），减少崩溃触发；热点省电 3.3 |
 | e5-sleep10 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep10) | Wi-Fi 芯片崩溃后约 2 秒自动恢复（内核 0010、恢复脚本重试、热点省电 3.2）；升级中不休眠 |
 | e5-sleep9 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep9) | 没插 SIM 卡也能深度休眠；底栏「详情」；SD 卡安装暂不深度休眠；升级时包里更新的应用替换旧的 |
 | e5-sleep8 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep8) | 网页升级；USB 关闭（不充电）与插线深度休眠；升级保留流量统计等用户数据；功率监测修正 |
@@ -204,7 +209,7 @@ Wi-Fi 芯片（SC2355 / Marlin3）在热点有流量时偶尔会固件崩溃，�
 
 1. **内核**：[e5-sleep-kernel](https://github.com/CharlesGool/e5-sleep-kernel) 的 `build/build-e5.sh sleep8 -e5-sleep8-charles 6`，
    再用 e5-linux `upstream/stage-root-modules.py` 生成 `root-modules.tar`。
-2. **上游系统**：检出 e5-linux `bb8775e`（含子模块），打上 [upstream/e5-linux-bb8775e.patch](upstream/e5-linux-bb8775e.patch)
+2. **上游系统**：检出 e5-linux `bb8775e`（含子模块），打上 [upstream/e5-linux-bb8775e.patch](upstream/e5-linux-bb8775e.patch)（e5-sleep14：`5ac9d504` 和 [upstream/e5-linux-5ac9d504.patch](upstream/e5-linux-5ac9d504.patch)，内容相同；内核用 `build-e5.sh` 的 `SLEEP=9`，在上游 sprd-linux-devs/linux `e5-6.18` 上加 0006–0010；后处理用 [build/make-rootfs-sleep14.sh](build/make-rootfs-sleep14.sh)）
    （BlueZ 在 x86 主机上编、`E5_FEATURES` 接受 `-e5-sleepN` 内核、hostapd 的 SAE 源码改动做成包补丁、构建时可用镜像源和 apk 缓存），
    恢复 CI 引导输入（`tools/ci-inputs.py restore`），然后：
 

@@ -1,4 +1,4 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep13)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep14)
 
 > [!WARNING]
 > **⚠️ Install into the internal storage, not onto an SD card.** A system on an SD card can show all kinds of odd problems
@@ -6,10 +6,16 @@
 > default**; for the internal storage run **`install-userdata.cmd`** (Windows) or **`bash install-userdata.sh`** (macOS / Linux),
 > that is `flash.cmd --data` / `./flash.sh --data`.
 
-> An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `bb8775e`
-> (2026-10-16: WiFi, modem and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
+> An **unofficial modification**, for the **E5** only. The system is rebuilt from source at upstream e5-linux `5ac9d504`
+> (2026-10-18: per-SIM APN and radio settings, data recovery, WiFi and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep14: upstream e5-linux 5ac9d504 merged (2026-10-18: per-SIM APN and radio settings, mobile data recovery,
+> ModemManager E5 rev 34, the info screen's SIM / traffic / wake fixes, WiFi multicast flow control and SAE, SIPA, SD power,
+> eMMC and display DMA, thermal); the kernel on upstream's new base e5-6.18 (b93bbc3a, which has our 0001-0005 and the
+> full-charge calibration) plus 0006-0010, 6.18.54-e5-sleep14-charles; install-userdata no longer stops at
+> "BOOTCHAIN-ERROR: another boot-chain operation is active" after an interrupted run: a lock whose run is gone is cleared;
+> volkeys 1.8.
 > e5-sleep13: a full charge sets the capacity to 100 % (kernel patch 0011: upstream charger-manager's check that
 > sets the fuel gauge to full at the charger's end voltage and current never ran, so a gauge that had drifted --
 > after the battery was out, say -- stayed at 50-60 % on a full battery); NTP servers reachable from China first, and
@@ -38,7 +44,7 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.7, sidekey 1.4, powermon 1.4, navbar 1.6.
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.8, sidekey 1.4, powermon 1.4, navbar 1.6.
 >   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.4, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out

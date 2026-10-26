@@ -1,0 +1,175 @@
+#!/system/bin/sh
+# Android A -> Linux B boot-chain synchronization. Adapted from mu300-linux's
+# tools/android-bootchain.sh; retain this repository's A/B boot contract.
+# check is read-only; sync backs up BOTH copies before any partition write.
+# Never source this script: its lock and rollback traps must own their process.
+set -u
+umask 077
+BY=/dev/block/by-name
+BACKUPS=/data/adb/e5-bootchain
+LOCK=/data/local/tmp/e5-bootchain.lock
+PARTS='uboot sml teecfg trustos vbmeta'
+changed=
+backup=
+locked=0
+fail() { echo "BOOTCHAIN-ERROR: $*" >&2; exit 1; }
+sha() { sha256sum "$1" | cut -d ' ' -f1; }
+size() { blockdev --getsize64 "$1"; }
+allowed() { case "$1" in uboot|sml|teecfg|trustos|vbmeta) return 0 ;; *) return 1 ;; esac; }
+
+# Validate the live AOSP block, including CRC, without Python on Android.
+check_misc() {
+    bytes=$(dd if="$BY/misc" bs=1 skip=2048 count=32 2>/dev/null | od -An -tu1 -v) || return 1
+    set -- $bytes
+    [ "$#" = 32 ] || return 1
+    crc=4294967295; i=0; stored=0
+    for byte in "$@"; do
+        if [ "$i" -lt 28 ]; then
+            crc=$((crc ^ byte)); bit=0
+            while [ "$bit" -lt 8 ]; do
+                if [ $((crc & 1)) = 1 ]; then crc=$(((crc >> 1) ^ 3988292384)); else crc=$((crc >> 1)); fi
+                bit=$((bit + 1))
+            done
+        else stored=$((stored | (byte << ((i - 28) * 8)))); fi
+        case "$i" in
+            4) [ "$byte" = 66 ] || return 1 ;; 5) [ "$byte" = 67 ] || return 1 ;;
+            6) [ "$byte" = 65 ] || return 1 ;; 7) [ "$byte" = 66 ] || return 1 ;;
+            8) [ "$byte" = 1 ] || return 1 ;; 9) [ $((byte & 7)) = 2 ] || return 1 ;;
+            12) am=$byte ;; 13|15) [ $((byte & 1)) = 0 ] || return 1 ;; 14) bm=$byte ;;
+        esac
+        i=$((i + 1))
+    done
+    [ $(((crc ^ 4294967295) & 4294967295)) = "$stored" ] || return 1
+    [ $((am & 128)) = 128 ] && [ $((am & 15)) -gt 0 ] || return 1
+    # A higher-priority B could be a pending Android OTA. Do not consume its
+    # fallback chain, even if A can currently run.
+    [ $((bm & 15)) -le $((am & 15)) ] || return 1
+}
+
+settle() { sync && blockdev --flushbufs "$1"; }
+put() {
+    allowed "$1" || return 1
+    [ "$(getprop ro.boot.slot_suffix)" = _a ] || return 1
+    [ "$(readlink -f "$BY/${1}_b")" = "$(cat "$backup/${1}_b.path")" ] || return 1
+    dd if="$2" of="$BY/${1}_b" bs=1048576 conv=fsync,notrunc || return 1
+    settle "$BY/${1}_b"
+}
+rollback() {
+    bad=
+    for part in $changed; do
+        expected=$(cat "$backup/${part}_b.sha256")
+        if put "$part" "$backup/${part}_b.img" && [ "$(sha "$BY/${part}_b")" = "$expected" ]; then
+            echo "boot chain: restored ${part}_b"
+        else bad="$bad $part"; fi
+    done
+    [ -z "$bad" ] || { echo "BOOTCHAIN-FAILED: restore failed:$bad; DO NOT boot Linux; backups: $backup" >&2; return 1; }
+    echo "boot chain: previous B chain restored and verified; backups: $backup"
+}
+cleanup() {
+    rc=$?
+    trap - EXIT HUP INT TERM
+    if [ -n "$changed" ]; then rollback || rc=2; fi
+    [ "$locked" = 0 ] || { rm -f "$LOCK/pid"; rmdir "$LOCK"; }
+    exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+case ${1:-} in check|sync) mode=$1 ;; *) fail 'usage: android-bootchain.sh check|sync' ;; esac
+[ "$#" = 1 ] || fail 'unexpected arguments'
+[ "$(id -u)" = 0 ] || fail 'root required'
+command -v getprop >/dev/null 2>&1 || fail 'run from Android only'
+[ "$(getprop ro.boot.slot_suffix)" = _a ] || fail 'this boot/runtime supports Android A and Linux B only'
+[ "$(getprop ro.boot.verifiedbootstate)" = orange ] || fail 'unlocked bootloader required'
+for part in misc boot_a boot_b l_agdsp_a; do [ -b "$BY/$part" ] || fail "missing block device: $part"; done
+# (e5-sleep14) The lock holds its owner's PID.  A run that was cut off -- the window
+# closed, the cable pulled, the phone restarted -- leaves the lock behind, and
+# /data/local/tmp keeps it across reboots: every later run failed here.  A lock
+# whose owner is gone is stale and taken over.  An older script's lock has no
+# PID: stale when no other boot-chain run (this one's parents aside) is running.
+ancestors=" $$ "
+p=$$
+while [ "$p" -gt 1 ] 2>/dev/null; do
+    p=$(sed -n 's/^[0-9]* (.*) . \([0-9]*\) .*/\1/p' "/proc/$p/stat" 2>/dev/null)
+    [ -n "$p" ] || break
+    ancestors="$ancestors$p "
+done
+lock_live() {
+    owner=$(cat "$LOCK/pid" 2>/dev/null)
+    if [ -n "$owner" ]; then
+        case "$(tr '\0' ' ' < "/proc/$owner/cmdline" 2>/dev/null)" in *bootchain.sh*) return 0 ;; esac
+        return 1
+    fi
+    for d in /proc/[0-9]*; do
+        case "$ancestors" in *" ${d#/proc/} "*) continue ;; esac
+        case "$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)" in *bootchain.sh\ check*|*bootchain.sh\ sync*) return 0 ;; esac
+    done
+    return 1
+}
+if ! mkdir "$LOCK" 2>/dev/null; then
+    lock_live && fail 'another boot-chain operation is active (or its lock needs inspection)'
+    echo "boot chain: a previous run's lock was left behind (that run is gone): removed"
+    rm -rf "$LOCK" && mkdir "$LOCK" 2>/dev/null || fail 'cannot take the boot-chain lock'
+fi
+echo $$ > "$LOCK/pid"
+locked=1
+check_misc || fail 'invalid CRC/BCAB, unsuccessful Android A, verity error or pending B-slot OTA'
+before_misc=$bytes
+
+# Check all aliases together, including non-chain partitions: a broken by-name
+# link must not redirect a write into Android, boot, misc, NV or userdata.
+paths=' '
+diff=
+for part in $PARTS; do
+    for slot in a b; do
+        dev=$BY/${part}_$slot
+        [ -b "$dev" ] || fail "missing block device: ${part}_$slot"
+        real=$(readlink -f "$dev") || fail "cannot resolve $dev"
+        case "$paths" in *" $real "*) fail "duplicate chain device: $dev" ;; esac
+        paths="$paths$real "
+        for alias in "$BY/"*; do
+            [ "$alias" = "$dev" ] || [ "$(readlink -f "$alias")" != "$real" ] || fail "aliased partition: $dev and $alias"
+        done
+        count=$(size "$dev") || fail "cannot size $dev"
+        case "$count" in ''|*[!0-9]*|0) fail "invalid size: $dev" ;; esac
+        hash=$(sha "$dev") || fail "cannot read $dev"
+        [ "${#hash}" = 64 ] || fail "short hash: $dev"
+        eval "size_${part}_${slot}=\$count; hash_${part}_${slot}=\$hash"
+    done
+    eval 'asize=$size_'"$part"'_a; bsize=$size_'"$part"'_b; ahash=$hash_'"$part"'_a; bhash=$hash_'"$part"'_b'
+    [ "$asize" = "$bsize" ] || fail "slot size mismatch: $part"
+    [ "$ahash" = "$bhash" ] || diff="$diff $part"
+done
+echo "BOOTCHAIN-PLAN a b$diff"
+[ "$mode" = sync ] || exit 0
+[ -n "$diff" ] || { echo 'BOOTCHAIN-OK a b (identical; nothing written)'; exit 0; }
+
+mkdir -p "$BACKUPS" || fail 'cannot create backup parent'
+backup=$(mktemp -d "$BACKUPS/$(date +%Y%m%d-%H%M%S).XXXXXX") || fail 'cannot allocate unique backup directory'
+for part in $diff; do
+    for slot in b a; do
+        eval 'expected=$hash_'"$part"'_'"$slot"
+        dd if="$BY/${part}_$slot" of="$backup/${part}_$slot.img" bs=1048576 conv=fsync || fail 'backup read/write failed'
+        [ "$(sha "$backup/${part}_$slot.img")" = "$expected" ] || fail 'backup verification failed'
+        printf '%s\n' "$expected" > "$backup/${part}_$slot.sha256" || fail 'backup metadata failed'
+        readlink -f "$BY/${part}_$slot" > "$backup/${part}_$slot.path" || fail 'backup device metadata failed'
+        printf '%s  %s\n' "$expected" "${part}_$slot.img" >> "$backup/SHA256SUMS" || fail 'backup manifest failed'
+    done
+done
+sync || fail 'backup sync failed'
+# Detect concurrent OTA activity after backup, before the first write.
+check_misc && [ "$bytes" = "$before_misc" ] || fail 'boot control changed during preparation'
+for part in $PARTS; do
+    for slot in a b; do
+        eval 'expected=$hash_'"$part"'_'"$slot"
+        [ "$(sha "$BY/${part}_$slot")" = "$expected" ] || fail 'chain changed during preparation'
+    done
+done
+echo "boot chain: verified backups in $backup"
+for part in $diff; do
+    changed="$changed $part"
+    expected=$(cat "$backup/${part}_a.sha256")
+    put "$part" "$backup/${part}_a.img" && [ "$(sha "$BY/${part}_b")" = "$expected" ] || fail "write/readback failed: ${part}_b"
+    echo "boot chain: ${part}_b <- ${part}_a, verified"
+done
+changed=
+echo "BOOTCHAIN-OK a b$diff"
