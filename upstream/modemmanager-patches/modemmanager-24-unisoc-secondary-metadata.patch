@@ -1,0 +1,221 @@
+Description: Defer optional secondary IMSI until the data bearer connects
+ Retain synchronous slot presence, the factory dual-stack power plan and
+ command ownership. Hydrate inactive SIM metadata through MM after connection,
+ checking current SIM object and ICCID before publishing a delayed response.
+Author: e5-linux
+Forwarded: no
+
+--- a/src/plugins/unisoc/mm-broadband-modem-unisoc.c
++++ b/src/plugins/unisoc/mm-broadband-modem-unisoc.c
+@@ -1716,17 +1716,129 @@
+     return 0;
+ }
+ 
++
++/* Secondary IMSI/operator details are not a prerequisite for the data SIM.
++ * Keep CCID discovery synchronous (an unknown slot must not become absent),
++ * then complete these optional fields once the data bearer is connected.
++ * No timers, extra AT owner, SIM power changes or radio reordering. */
++static gboolean
++secondary_sim_is_current (MMBaseModem *self, MMBaseSim *sim)
++{
++    g_autoptr(GPtrArray) slots = NULL;
++    guint other = 1 - port_card ();
++
++    if (!mm_base_modem_get_valid (self))
++        return FALSE;
++    g_object_get (self, MM_IFACE_MODEM_SIM_SLOTS, &slots, NULL);
++    return slots && other < slots->len && g_ptr_array_index (slots, other) == sim;
++}
++
++static gchar *
++secondary_sim_parse_imsi (const gchar *response, const gchar *expected_iccid)
++{
++    g_auto(GStrv) lines = NULL;
++    g_autofree gchar *imsi = NULL;
++    gboolean matched = FALSE;
++    guint i;
++
++    if (!response || !expected_iccid || !*expected_iccid)
++        return NULL;
++    lines = g_strsplit_set (response, "\r\n", -1);
++    for (i = 0; lines[i]; i++) {
++        gchar *line = g_strstrip (lines[i]);
++        if (g_str_has_prefix (line, "+CCID:")) {
++            line = g_strstrip (line + strlen ("+CCID:"));
++            g_strdelimit (line, "\"", ' ');
++            line = g_strstrip (line);
++            if (matched || g_strcmp0 (line, expected_iccid))
++                return NULL;
++            matched = TRUE;
++        } else if (!g_strcmp0 (line, expected_iccid)) {
++            if (matched)
++                return NULL;
++            matched = TRUE;
++        } else if (*line && strspn (line, "0123456789") == strlen (line)) {
++            if (imsi || strlen (line) < 5)
++                return NULL;
++            imsi = g_strdup (line);
++        }
++    }
++    return matched ? g_steal_pointer (&imsi) : NULL;
++}
++
++static void
++secondary_sim_identity_ready (MMBaseModem *self, GAsyncResult *res, GTask *task)
++{
++    MMBaseSim *sim = g_task_get_task_data (task);
++    g_autoptr(GError) error = NULL;
++    g_autofree gchar *imsi = NULL;
++    g_autofree gchar *operator_id = NULL;
++    g_autofree gchar *restore = NULL;
++    const gchar *response;
++
++    response = mm_base_modem_at_command_finish (self, res, &error);
++    if (!error && secondary_sim_is_current (self, sim))
++        imsi = secondary_sim_parse_imsi (response, mm_gdbus_sim_get_sim_identifier (MM_GDBUS_SIM (sim)));
++    if (imsi) {
++        operator_id = g_strndup (imsi, 5);
++        mm_gdbus_sim_set_imsi (MM_GDBUS_SIM (sim), imsi);
++        mm_gdbus_sim_set_operator_identifier (MM_GDBUS_SIM (sim), operator_id);
++    } else
++        mm_obj_dbg (self, "secondary SIM identity remains unavailable; keeping slot presence");
++
++    /* Like the original slot loader, restore the selected command context.
++     * Never send restoration traffic through an invalidated modem. */
++    if (mm_base_modem_get_valid (self)) {
++        restore = g_strdup_printf ("+SPACTCARD=%u;+CFUN?", port_card ());
++        mm_base_modem_at_command (self, restore, 5, FALSE, NULL, NULL);
++    }
++    g_object_set_data (G_OBJECT (sim), "unisoc-identity-inflight", NULL);
++    g_object_unref (task);
++}
++
++static void
++secondary_sim_state_changed (MMBroadbandModemUnisoc *self, GParamSpec *pspec, gpointer unused)
++{
++    g_autoptr(GPtrArray) slots = NULL;
++    MMModemState state;
++    MMBaseSim *sim;
++    GTask *task;
++    const gchar *known_imsi;
++    g_autofree gchar *command = NULL;
++    guint other = 1 - port_card ();
++
++    (void) pspec;
++    (void) unused;
++    g_object_get (self, MM_IFACE_MODEM_STATE, &state,
++                  MM_IFACE_MODEM_SIM_SLOTS, &slots, NULL);
++    if (state != MM_MODEM_STATE_CONNECTED || !slots || other >= slots->len)
++        return;
++    sim = g_ptr_array_index (slots, other);
++    known_imsi = sim ? mm_gdbus_sim_get_imsi (MM_GDBUS_SIM (sim)) : NULL;
++    if (!sim || !secondary_sim_is_current (MM_BASE_MODEM (self), sim) ||
++        !mm_gdbus_sim_get_sim_identifier (MM_GDBUS_SIM (sim)) || (known_imsi && *known_imsi) ||
++        g_object_get_data (G_OBJECT (sim), "unisoc-identity-inflight"))
++        return;
++
++    /* Recheck CCID together with CIMI, so an insertion during this deferred
++     * operation cannot attach a replacement card's IMSI to an old SIM object. */
++    command = g_strdup_printf ("+SPACTCARD=%u;+CCID?;+CIMI", other);
++    g_object_set_data (G_OBJECT (sim), "unisoc-identity-inflight", GINT_TO_POINTER (1));
++    task = g_task_new (self, NULL, NULL, NULL);
++    g_task_set_task_data (task, g_object_ref (sim), g_object_unref);
++    mm_base_modem_at_command (MM_BASE_MODEM (self), command, 5, FALSE,
++                              (GAsyncReadyCallback) secondary_sim_identity_ready, task);
++}
++
+ typedef struct {
+     guint  card;   /* the port's */
+     gchar *iccid;  /* the other card's */
+-    gchar *imsi;
+ } LoadSimSlotsContext;
+ 
+ static void
+ load_sim_slots_context_free (LoadSimSlotsContext *ctx)
+ {
+     g_free (ctx->iccid);
+-    g_free (ctx->imsi);
+     g_slice_free (LoadSimSlotsContext, ctx);
+ }
+ 
+@@ -1755,20 +1867,14 @@
+     slots = g_ptr_array_new_full (2, (GDestroyNotify) sim_slot_free);
+     for (i = 0; i < 2; i++) {
+         MMBaseSim        *sim = NULL;
+-        g_autofree gchar *operator_id = NULL;
+-
+         if (i == ctx->card)
+             /* the port's card: its properties load as any primary SIM's do */
+             sim = mm_base_sim_new_initialized (MM_BASE_MODEM (self), i + 1, TRUE,
+                                                NULL, NULL, NULL, NULL, NULL, NULL);
+-        else if (ctx->iccid) {
+-            /* (the MNC of every Chinese network has two digits) */
+-            if (ctx->imsi && strlen (ctx->imsi) >= 5)
+-                operator_id = g_strndup (ctx->imsi, 5);
++        else if (ctx->iccid)
+             sim = mm_base_sim_new_initialized (MM_BASE_MODEM (self), i + 1, FALSE,
+-                                               ctx->iccid, ctx->imsi, NULL, operator_id,
++                                               ctx->iccid, NULL, NULL, NULL,
+                                                NULL, NULL);
+-        }
+         g_ptr_array_add (slots, sim);
+     }
+     if (sim_slots)
+@@ -1805,31 +1911,12 @@
+ }
+ 
+ static void
+-other_card_cimi_ready (MMBaseModem  *self,
+-                       GAsyncResult *res,
+-                       GTask        *task)
+-{
+-    LoadSimSlotsContext *ctx = g_task_get_task_data (task);
+-    const gchar         *response;
+-
+-    response = mm_base_modem_at_command_finish (self, res, NULL);
+-    if (response) {
+-        g_autofree gchar *imsi = g_strstrip (g_strdup (response));
+-
+-        if (*imsi && strspn (imsi, "0123456789") == strlen (imsi))
+-            ctx->imsi = g_steal_pointer (&imsi);
+-    }
+-    other_card_back (self, task);
+-}
+-
+-static void
+ other_card_ccid_ready (MMBaseModem  *self,
+                        GAsyncResult *res,
+                        GTask        *task)
+ {
+     LoadSimSlotsContext *ctx = g_task_get_task_data (task);
+     const gchar         *response;
+-    g_autofree gchar    *cmd = NULL;
+     g_autofree gchar    *iccid = NULL;
+ 
+     /* +CCID: "89861500202430712412"; an error: no SIM in that slot */
+@@ -1842,13 +1929,8 @@
+         if (*iccid)
+             ctx->iccid = g_steal_pointer (&iccid);
+     }
+-    if (!ctx->iccid) {
+-        other_card_back (self, task);
+-        return;
+-    }
+-    cmd = g_strdup_printf ("+SPACTCARD=%u;+CIMI", 1 - ctx->card);
+-    mm_base_modem_at_command (self, cmd, 5, FALSE,
+-                              (GAsyncReadyCallback) other_card_cimi_ready, task);
++    /* Only CCID/presence belongs on the initialization path. */
++    other_card_back (self, task);
+ }
+ 
+ static void
+@@ -2454,6 +2536,8 @@
+ mm_broadband_modem_unisoc_init (MMBroadbandModemUnisoc *self)
+ {
+     get_private (self)->voice_fd = -1;
++    g_signal_connect (self, "notify::" MM_IFACE_MODEM_STATE,
++                      G_CALLBACK (secondary_sim_state_changed), NULL);
+     g_object_set_data (G_OBJECT (self), "e5-dual-sim-voice", GINT_TO_POINTER (1));
+     g_object_set (self, MM_IFACE_MODEM_VOICE_PERIODIC_CALL_LIST_CHECK_DISABLED, TRUE, NULL);
+ }

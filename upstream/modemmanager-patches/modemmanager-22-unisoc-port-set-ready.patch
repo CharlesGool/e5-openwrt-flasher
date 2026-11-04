@@ -1,0 +1,74 @@
+--- a/src/mm-plugin-manager.c
++++ b/src/mm-plugin-manager.c
+@@ -1266,6 +1266,42 @@
+                 device_context->name, mm_kernel_device_get_name (port));
+ }
+ 
++/* SIPC is a fixed internal topology, not a USB composite device. Only end
++ * collection after the tagged AT port and the entire selected eight-context
++ * data bank have actually reached MM. Incomplete/external devices retain all
++ * generic waits. AT probing and every initialization command still run. */
++static gboolean
++device_context_has_complete_unisoc_ports (DeviceContext *ctx)
++{
++    GList *l;
++    gboolean tagged_at = FALSE;
++    guint bank;
++
++    for (l = mm_device_peek_port_probe_list (ctx->device); l; l = g_list_next (l)) {
++        MMKernelDevice *port = mm_port_probe_peek_port (MM_PORT_PROBE (l->data));
++
++        if (!g_strcmp0 (mm_kernel_device_get_subsystem (port), "wwan") &&
++            !g_strcmp0 (mm_kernel_device_get_driver (port), "sprd-spipe") &&
++            mm_kernel_device_get_property_as_boolean (port, "ID_MM_UNISOC_SIPC"))
++            tagged_at = TRUE;
++    }
++    if (!tagged_at)
++        return FALSE;
++
++    for (bank = 0; bank < 2; bank++) {
++        guint i;
++        for (i = 0; i < 8; i++) {
++            gchar name[16];
++            g_snprintf (name, sizeof (name), "sipa_eth%u", bank * 8 + i);
++            if (!mm_device_owns_port_name (ctx->device, "net", name))
++                break;
++        }
++        if (i == 8)
++            return TRUE;
++    }
++    return FALSE;
++}
++
+ static void
+ device_context_port_added (MMPluginManager *self,
+                            DeviceContext   *device_context,
+@@ -1295,9 +1331,25 @@
+     /* Refresh the extra probing timeout. */
+     if (device_context->extra_probing_time_id)
+         g_source_remove (device_context->extra_probing_time_id);
+-    device_context->extra_probing_time_id = g_timeout_add (EXTRA_PROBING_TIME_MSECS,
+-                                                           (GSourceFunc) device_context_extra_probing_time_elapsed,
+-                                                           device_context);
++    device_context->extra_probing_time_id = 0;
++    if (device_context_has_complete_unisoc_ports (device_context)) {
++        if (device_context->min_probing_time_id) {
++            g_source_remove (device_context->min_probing_time_id);
++            device_context->min_probing_time_id = 0;
++        }
++        if (device_context->min_wait_time_id) {
++            g_source_remove (device_context->min_wait_time_id);
++            /* Defer to the next main-loop iteration: this new port context
++             * must be inserted before the waiting contexts can run. */
++            device_context->min_wait_time_id = g_idle_add (
++                (GSourceFunc) device_context_min_wait_time_elapsed, device_context);
++        }
++        mm_obj_dbg (self, "task %s: complete internal SIPC port bank reported", device_context->name);
++    } else {
++        device_context->extra_probing_time_id = g_timeout_add (
++            EXTRA_PROBING_TIME_MSECS,
++            (GSourceFunc) device_context_extra_probing_time_elapsed, device_context);
++    }
+ 
+     /* Setup a new port context for the newly added port */
+     port_context = port_context_new (self,
