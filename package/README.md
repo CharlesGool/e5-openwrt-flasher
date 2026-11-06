@@ -1,4 +1,4 @@
-# OpenWrt flash package · E5 deep sleep edition (e5-sleep15)
+# OpenWrt flash package · E5 deep sleep edition (e5-sleep16)
 
 > [!WARNING]
 > **⚠️ Install into the internal storage, not onto an SD card.** A system on an SD card can show all kinds of odd problems
@@ -10,6 +10,11 @@
 > (2026-10-18: per-SIM APN and radio settings, data recovery, WiFi and info-screen fixes), plus the deep sleep kernel and the changes below. Flashing works exactly as below.
 > e5-sleep8: kernel -e5-sleep8-charles (0009: deep sleep plugged in while USB is fully off); LuCI System -> E5 系统升级
 > updates the device from this package, no computer needed; four apps made part of the system.
+> e5-sleep16: the info screen's touch no longer "dies" after a while: the touch controller could keep reporting one contact that
+> never lifted, so every real finger became the second one and the lock-screen swipe and page swipes ignored it (only a UI
+> restart helped). Kernel 0015 resets the controller and releases every contact once one has stayed still for 30 s, and the
+> lock-screen and page swipes follow the finger that just went down. The power monitor chart on the details page now marks
+> its time axis in the device's time zone (GMT+8), on whole local hours. Kernel 6.18.54-e5-sleep16-charles, volkeys 2.0.
 > e5-sleep15: the feature updates of upstream e5-linux 441839bd (2026-10-30) that stand on their own, ported by what they do
 > rather than by upstream's new layout: the E5 ST7365P panel's dithering (kernel 0012; less banding in dark gradients, also
 > when the bootloader has already lit the panel), the f_ncm timer flush retried when USB TX requests are busy (0013), the SC2355
@@ -49,7 +54,7 @@
 >   this package's own branch: no online update; About names the original author (Enceka) and the fork's maintainer (CharlesGool)
 >   with a QR code of github.com/CharlesGool. SIM-status timestamps on CLOCK_BOOTTIME.
 > * Part of the system, not apps (not in the app lists; settings under Settings: volume keys and side key in a new Keys
->   category, the bottom bar in Screen, the power monitor in Charging): volkeys 1.9, sidekey 1.4, powermon 1.4, navbar 1.6.
+>   category, the bottom bar in Screen, the power monitor in Charging): volkeys 2.0, sidekey 1.4, powermon 1.4, navbar 1.6.
 >   The power monitor is a card of the Details page. Preinstalled apps: hotspot power saver 3.4, webapps 1.6 (from e5-sleep9 an update puts these in place of older installed copies, settings kept).
 >
 > `--update` keeps the packages added with apk (same OpenWrt build), but not those this package leaves out

@@ -91,10 +91,12 @@ body[data-theme=light] #pm-card .pm-spans button.on { background: var(--accent);
 		const step = [300, 600, 900, 1800, 3600, 7200, 10800, 21600].find((v) => sp / v <= fit) || 43200;
 		const p2 = (n) => String(n).padStart(2, '0');
 		g.textAlign = 'center'; g.textBaseline = 'top';
-		for (let t = Math.ceil(c.from / step) * step; t <= c.to; t += step) {
-			const x = Math.round(X(t)) + .5, d = new Date(t * 1000);
+		const off = last?.tz_offset ?? 0;	// ticks on whole local hours, not UTC ones
+		for (let t = Math.ceil((c.from + off) / step) * step - off; t <= c.to; t += step) {
+			// the device's time zone (app.js localParts: WebKit's own zone is UTC here)
+			const x = Math.round(X(t)) + .5, d = localParts(t * 1000);
 			g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-			const s = p2(d.getHours()) + ':' + p2(d.getMinutes()), w = g.measureText(s).width / 2;
+			const s = p2(d.h) + ':' + p2(d.mi), w = g.measureText(s).width / 2;
 			g.fillText(s, Math.min(x1 - w, Math.max(x0 + w, x)), y1 + 3);
 		}
 		g.strokeStyle = C.axis;

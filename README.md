@@ -12,12 +12,14 @@
 
 ## 下载
 
-**当前版本 e5-sleep15**：[Openwrt_E5_Flasher_sleep15.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep15/Openwrt_E5_Flasher_sleep15.zip)
-（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep15)）
+**当前版本 e5-sleep16**：[Openwrt_E5_Flasher_sleep16.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep16/Openwrt_E5_Flasher_sleep16.zip)
+（167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep16)）
 
-SHA-256 `592e135ba3cc852aa95f67f7a09980c01d04e6a0eaf2e50eca4181fa10cef3e9`
+SHA-256 `8a9bfc8f0038a57d3bf08cd8b92c24fb0e263283533da77e992393c19cc2e635`
 
-e5-sleep15：搬进上游 e5-linux `441839bd`（10-30）里能单独搬的功能（按实现移植，不照搬它新的目录结构）：**屏幕色阶**（内核 0012，ST7365P 抖动）、USB NCM 忙时重试刷新（0013）、Wi-Fi 块确认（BA）重建（0014），以及 ModemManager 4 个上游补丁（拨号不再等副卡的可选信息）；音量键 1.9。Wi-Fi BA 和 NCM 还没有长时间实测。
+e5-sleep16：**修复信息屏触摸放久了“死掉”**（触摸芯片一直报一个不抬起的触点，真手指成了第二根，锁屏上滑和翻页不认；以前只能重启信息屏）：内核 0015 让一个 30 秒纹丝不动的触点复位触摸芯片并松开，锁屏上滑和翻页改为跟踪新按下的手指；**详细信息页功率监测图的时间刻度改为本机时区（GMT+8）**；音量键 2.0。
+
+e5-sleep15 下载：[Openwrt_E5_Flasher_sleep15.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep15/Openwrt_E5_Flasher_sleep15.zip)；e5-sleep15：搬进上游 e5-linux `441839bd`（10-30）里能单独搬的功能（按实现移植，不照搬它新的目录结构）：**屏幕色阶**（内核 0012，ST7365P 抖动）、USB NCM 忙时重试刷新（0013）、Wi-Fi 块确认（BA）重建（0014），以及 ModemManager 4 个上游补丁（拨号不再等副卡的可选信息）；音量键 1.9。Wi-Fi BA 和 NCM 还没有长时间实测。
 
 e5-sleep14 下载：[Openwrt_E5_Flasher_sleep14.zip](https://github.com/CharlesGool/e5-openwrt-flasher/releases/download/e5-sleep14/Openwrt_E5_Flasher_sleep14.zip)
 （167 MB，[Release 页面](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep14)）
@@ -198,7 +200,8 @@ Wi-Fi 芯片（SC2355 / Marlin3）在热点有流量时偶尔会固件崩溃，�
 
 | 版本 | 下载 | 说明 |
 |---|---|---|
-| **e5-sleep15** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep15) | 搬进上游 441839bd 的屏幕色阶、NCM 重试、Wi-Fi BA 重建和 MM 补丁 21–24（拨号不等副卡）；音量键 1.9 |
+| **e5-sleep16** | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep16) | 触摸放久了“死掉”的修复（内核 0015 + 锁屏上滑 / 翻页按手指跟踪）；功率监测图时间刻度用本机时区；音量键 2.0 |
+| e5-sleep15 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep15) | 搬进上游 441839bd 的屏幕色阶、NCM 重试、Wi-Fi BA 重建和 MM 补丁 21–24（拨号不等副卡）；音量键 1.9 |
 | e5-sleep14 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep14) | 合并上游 e5-linux 5ac9d504 和新内核基线 e5-6.18（+0006–0010）；安装被打断留下的锁自动清除；音量键 1.8 |
 | e5-sleep13 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep13) | 充满电时电量校准到 100%（0011）；国内 NTP 服务器、没有数据网络时用基带网络时间；音量键 1.7 |
 | e5-sleep12 | [本仓库 Release](https://github.com/CharlesGool/e5-openwrt-flasher/releases/tag/e5-sleep12) | 内核完整重编为 -e5-sleep12-charles；只在深度休眠时屏蔽按键；熄屏长按侧键开关热点（侧键 1.4） |
